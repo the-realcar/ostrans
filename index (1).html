@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Strona Główna - PPUT Ostrans</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand&family=Oswald&family=Doto&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Quicksand, sans-serif;
+      background-color: #ffffff;
+      color: #333;
+    }
+
+    header {
+      background-color: #003366;
+      color: white;
+      padding: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-title {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      font-size: 1.5rem;
+    }
+
+    .logo-title img {
+      height: 50px;
+    }
+
+    nav {
+      margin-top: 10px;
+    }
+
+    nav a {
+      text-decoration: none;
+      color: white;
+      margin: 0 10px;
+      font-weight: bold;
+      padding: 8px 12px;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+
+    nav a:hover {
+      background-color: #0055aa;
+    }
+
+    main {
+      padding: 40px 20px;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .gallery-wrapper {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+
+    .gallery-track {
+      display: flex;
+      transition: transform 0.5s ease-in-out;
+    }
+
+    .gallery-image {
+      min-width: 100%;
+      height: 500px;
+      object-fit: cover;
+    }
+
+    .arrow-button {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      border: none;
+      font-size: 2rem;
+      cursor: pointer;
+      padding: 10px 15px;
+      z-index: 2;
+    }
+
+    .arrow-button.left {
+      left: 10px;
+    }
+
+    .arrow-button.right {
+      right: 10px;
+    }
+
+    .dots {
+      display: flex;
+      justify-content: center;
+      margin-top: 15px;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #aaa;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    .dot.active {
+      background-color: #333;
+    }
+
+    section {
+      background-color: #eee;
+      padding: 40px 20px;
+      margin-top: 60px;
+    }
+
+    section h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    section p {
+      max-width: 800px;
+      margin: auto;
+      font-size: 1rem;
+    }
+
+    footer {
+      background-color: #003366;
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+    }
+
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+
+    .footer-logo img {
+      height: 80px;
+    }
+
+    /* Responsywność */
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      nav {
+        width: 100%;
+        margin-top: 10px;
+      }
+
+      nav a {
+        display: inline-block;
+        margin: 5px 5px 0 0;
+      }
+
+      .gallery-image {
+        height: 250px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .gallery-image {
+        height: 180px;
+      }
+
+      .arrow-button {
+        font-size: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-title">
+      <a href="https://ostrans.famisska.pl"><img src="https://ostrans.famisska.pl/logo.png" alt="Logo PPUT Ostrans"></a>
+      <span>PPUT Ostrans</span></a>
+    </div>
+    <nav>
+      <a href="https://ostrans.famisska.pl/pracuj">Pracuj z nami</a>
+      <a href="https://ostrans.famisska.pl/linie">Linie</a>
+      <a href="https://ostrans.famisska.pl/aktualnosci">Aktualności</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Strona Główna</h1>
+
+    <div class="gallery-wrapper">
+      <button class="arrow-button left" onclick="changeSlide(-1)">&#8592;</button>
+
+      <div class="gallery-track" id="galleryTrack">
+        <!-- Clone last -->
+        <img src="wp-content/uploads/2025/05/image-139.png" class="gallery-image">
+        <!-- Real -->
+        <img src="wp-content/uploads/2025/05/image-156.png" class="gallery-image">
+        <img src="wp-content/uploads/2025/05/image-73.png" class="gallery-image">
+        <img src="wp-content/uploads/2025/05/image-97.png" class="gallery-image">
+        <img src="wp-content/uploads/2025/05/image-98.png" class="gallery-image">
+        <img src="wp-content/uploads/2025/05/image-132.png" class="gallery-image">
+        <!-- Clone first -->
+        <img src="wp-content/uploads/2025/05/image-139.png" class="gallery-image">
+      </div>
+
+      <button class="arrow-button right" onclick="changeSlide(1)">&#8594;</button>
+    </div>
+
+    <div class="dots" id="dotsContainer"></div>
+
+    <section>
+      <h2>O Nas</h2>
+      <p align="center">Ostrans to prywatna firma oferująca usługi transportowe. Operujemy w Ostrołęce i okolicach dla MZK Ostrołęka. 
+Firma została założona 16 października 2022 roku i jest prowadzona do dnia dzisiejszego.
+Posiadamy w naszej ofercie duży tabor przystosowany do najnowszych standardów. Ponad 90% naszej floty jest niskopodłogowa i gotowa na transport osób niepełnosprawnych. Jesteśmy również jedyną firmą z całodniowymi rozkładami jazdy. 
+Więc na co czekasz? Wypełnij formularz o pracę i się skontaktujemy z Tobą! </p>
+    </section>
+  </main>
+  <footer>
+    <div class="footer-logo">
+      <a href="https://ostrans.famisska.pl"><img src="https://ostrans.famisska.pl/logo.png" alt="Logo PPUT Ostrans"></a>
+      <span>PPUT Ostrans</span>
+    </div>
+    <p>Copyright © 2025 Ostrans. Wszelkie prawa zastrzeżone</p>
+  </footer>
+
+  <script>
+    const track = document.getElementById('galleryTrack');
+    const dotsContainer = document.getElementById('dotsContainer');
+    const totalRealSlides = 6;
+    let currentIndex = 1;
+    let isTransitioning = false;
+    let autoplayInterval;
+
+    function updateTrackPosition() {
+      track.style.transition = "transform 0.5s ease-in-out";
+      track.style.transform = `translateX(-${currentIndex * 100}%)`;
+      updateDots();
+    }
+
+    function changeSlide(direction) {
+      if (isTransitioning) return;
+      isTransitioning = true;
+      currentIndex += direction;
+      updateTrackPosition();
+    }
+
+    function updateDots() {
+      const dots = document.querySelectorAll('.dot');
+      dots.forEach((dot, idx) => {
+        dot.classList.toggle('active', idx === (currentIndex - 1 + totalRealSlides) % totalRealSlides);
+      });
+    }
+
+    function createDots() {
+      for (let i = 0; i < totalRealSlides; i++) {
+        const dot = document.createElement('div');
+        dot.classList.add('dot');
+        dot.addEventListener('click', () => {
+          currentIndex = i + 1;
+          updateTrackPosition();
+        });
+        dotsContainer.appendChild(dot);
+      }
+    }
+
+    function handleTransitionEnd() {
+      if (currentIndex === 0) {
+        track.style.transition = "none";
+        currentIndex = totalRealSlides;
+        track.style.transform = `translateX(-${currentIndex * 100}%)`;
+      } else if (currentIndex === totalRealSlides + 1) {
+        track.style.transition = "none";
+        currentIndex = 1;
+        track.style.transform = `translateX(-${currentIndex * 100}%)`;
+      }
+      isTransitioning = false;
+      updateDots();
+    }
+
+    function startAutoplay() {
+      autoplayInterval = setInterval(() => changeSlide(1), 4000);
+    }
+
+    function stopAutoplay() {
+      clearInterval(autoplayInterval);
+    }
+
+    createDots();
+    updateTrackPosition();
+    track.addEventListener('transitionend', handleTransitionEnd);
+    startAutoplay();
+
+    document.querySelector('.gallery-wrapper').addEventListener('mouseenter', stopAutoplay);
+    document.querySelector('.gallery-wrapper').addEventListener('mouseleave', startAutoplay);
+  </script>
+
+</body>
+</html>
