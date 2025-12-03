@@ -1,4 +1,4 @@
-:root{--blue:#003366;--muted:#666}
+:root{--blue:#003366;--muted:#666;--focus:#ffbf47}
 *{box-sizing:border-box}
 body{font-family:Quicksand,Arial,sans-serif;background:#f5f7fa;color:#222;margin:0}
 .panel-header{background:var(--blue);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
@@ -19,4 +19,54 @@ body{font-family:Quicksand,Arial,sans-serif;background:#f5f7fa;color:#222;margin
 .panel{background:#fff;padding:14px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.04)}
 .role-view.hidden{display:none}
 .panel-footer{text-align:center;padding:18px;background:#fff;margin-top:18px;border-top:1px solid #eee}
+
+/* Dostępność: skip link */
+.skip-link{
+  position:absolute;
+  left:-9999px;
+  top:auto;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+}
+.skip-link:focus{
+  left:10px;
+  top:10px;
+  width:auto;
+  height:auto;
+  padding:8px 12px;
+  background:#000;
+  color:#fff;
+  z-index:9999;
+  border-radius:4px;
+}
+
+/* Ukryte etykiety (screen-reader only) */
+.sr-only{
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0,0,0,0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Wyraźny focus dla elementów interaktywnych */
+button:focus, a:focus, input:focus, select:focus, textarea:focus{
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* Dodatkowe kontrastowe tło przycisków */
+.auth-panel button{
+  background:var(--blue);
+  color:#fff;
+  border:none;
+  cursor:pointer;
+}
+
 @media(max-width:600px){.panel-header{flex-direction:column;align-items:flex-start}.auth-panel{margin:8px}}
