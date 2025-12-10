@@ -64,8 +64,6 @@ document.getElementById('doLogin').addEventListener('click', async () => {
     document.getElementById('dashboard').setAttribute('aria-hidden','false');
     showDashboardFor(user);
     notify('Zalogowano pomyślnie.', 'success');
-    // ustaw fokus do głównej sekcji
-    document.getElementById('mainContent')?.focus();
   } catch (err) {
     const demo = tryDemoLogin(login, pass);
     if (demo) {
