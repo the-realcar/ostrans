@@ -37,6 +37,126 @@ app.get('/auth/discord', (req, res) => {
   res.redirect(url);
 });
 
+// --- Discord OAuth callback: exchange code -> token, get user, find/create pracownik, determine uprawnienie from guild roles ---
+app.get('/auth/discord/callback', async (req, res) => {
+  const code = req.query.code;
+  if (!code) return res.status(400).send('missing code');
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+  const redirectUri = process.env.DISCORD_REDIRECT_URI || `${MAIN_SITE}/auth/discord/callback`;
+
+  try {
+    // exchange code for token
+    const params = new URLSearchParams();
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+    params.append('grant_type', 'authorization_code');
+    params.append('code', code);
+    params.append('redirect_uri', redirectUri);
+
+    const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    if (!tokenRes.ok) {
+      console.error('token exchange failed', await tokenRes.text());
+      return res.status(500).send('Discord token exchange failed');
+    }
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
+
+    // get user info
+    const userRes = await fetch('https://discord.com/api/users/@me', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!userRes.ok) {
+      console.error('discord user fetch failed', await userRes.text());
+      return res.status(500).send('Discord user fetch failed');
+    }
+    const duser = await userRes.json(); // id, username, discriminator, email (if permitted)
+
+    // --- DETERMINE ROLES FROM GUILD (requires DISCORD_GUILD_ID + DISCORD_BOT_TOKEN) ---
+    const guildId = process.env.DISCORD_GUILD_ID;
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+    let mappedUprawnienie = null; // 'zarzad' | 'dyspozytor' | 'kierowca' (fallback kierowca)
+    try {
+      if (guildId && botToken) {
+        const memberRes = await fetch(`https://discord.com/api/guilds/${guildId}/members/${duser.id}`, {
+          headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' }
+        });
+        if (memberRes.ok) {
+          const member = await memberRes.json(); // { roles: [...] }
+          const roles = Array.isArray(member.roles) ? member.roles : [];
+          const roleZ = process.env.ROLE_ZARZAD_ID;
+          const roleD = process.env.ROLE_DYSP_ID;
+          const roleK = process.env.ROLE_KIEROWCA_ID;
+          if (roleZ && roles.includes(roleZ)) mappedUprawnienie = 'zarzad';
+          else if (roleD && roles.includes(roleD)) mappedUprawnienie = 'dyspozytor';
+          else if (roleK && roles.includes(roleK)) mappedUprawnienie = 'kierowca';
+        } else {
+          // member not found / bot lacks permission — ignore and fallback
+          console.warn('guild member fetch failed', await memberRes.text());
+        }
+      }
+    } catch (e) {
+      console.warn('role fetch error', e);
+    }
+
+    // fallback default if mapping failed
+    if (!mappedUprawnienie) mappedUprawnienie = 'kierowca';
+
+    // find pracownik by discord_id
+    const q = await db.query('SELECT p.*, u.poziom AS uprawnienie, p.uprawnienie_id FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id WHERE p.discord_id=$1 LIMIT 1', [duser.id]);
+    let user;
+    if (q.rowCount > 0) {
+      user = q.rows[0];
+      // update uprawnienie in DB if different
+      try {
+        const wanted = mappedUprawnienie;
+        if (user.uprawnienie !== wanted) {
+          // find uprawnienie id
+          const upq = await db.query('SELECT id FROM uprawnienia WHERE poziom=$1 LIMIT 1', [wanted]);
+          const upId = upq.rowCount ? upq.rows[0].id : null;
+          if (upId) {
+            await db.query('UPDATE pracownicy SET uprawnienie_id=$1 WHERE id=$2', [upId, user.id]);
+            user.uprawnienie = wanted;
+          }
+        }
+      } catch (e) { console.warn('unable to update uprawnienie', e); }
+    } else {
+      // auto-create pracownik (minimal)
+      try {
+        // resolve uprawnienie_id for mappedUprawnienie
+        const upq = await db.query('SELECT id FROM uprawnienia WHERE poziom=$1 LIMIT 1', [mappedUprawnienie]);
+        let upId = upq.rowCount ? upq.rows[0].id : null;
+        if (!upId) {
+          const any = await db.query('SELECT id,poziom FROM uprawnienia LIMIT 1');
+          upId = any.rowCount ? any.rows[0].id : null;
+        }
+        const login = `discord_${duser.id}`;
+        const nameParts = (duser.username || '').split(' ');
+        const imie = nameParts[0] || duser.username;
+        const nazwisko = nameParts.slice(1).join('') || '';
+        const ins = await db.query('INSERT INTO pracownicy (imie,nazwisko,login,discord_id,uprawnienie_id) VALUES ($1,$2,$3,$4,$5) RETURNING id,imie,nazwisko,login', [imie, nazwisko, login, duser.id, upId]);
+        user = { id: ins.rows[0].id, imie: ins.rows[0].imie, nazwisko: ins.rows[0].nazwisko, login: ins.rows[0].login, uprawnienie: mappedUprawnienie };
+      } catch (e) {
+        console.error('auto-create user failed', e);
+      }
+    }
+
+    if (!user) return res.status(403).send('User mapping failed');
+    // sign JWT (include uprawnienie)
+    const token = jwt.sign({ id: user.id, login: user.login, uprawnienie: user.uprawnienie || mappedUprawnienie }, JWT_SECRET, { expiresIn: '8h' });
+    // redirect to panel with token in query (frontend will store it)
+    const redirectTo = `${MAIN_SITE.replace(/\/$/,'')}/panel/index.html?token=${encodeURIComponent(token)}`;
+    return res.redirect(redirectTo);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).send('server error');
+  }
+});
+
 // uploads folder for zgłoszenia
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -248,122 +368,9 @@ app.get('/panel/wyslij-raport', authMiddleware, (req,res) => {
 });
 
 // --- STRONA ADMINA (formularze) ---
-app.get('/admin', authMiddleware, async (req, res) => {
+app.get('/admin', authMiddleware, (req, res) => {
   if (req.user.uprawnienie !== 'zarzad') return res.status(403).send('Forbidden');
-  res.send(`
-    <!doctype html>
-    <html lang="pl">
-    <head><meta charset="utf-8"><title>Panel danych — Ostrans</title>
-    <style>
-      .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-      .form-section{margin-bottom:18px}
-    </style>
-    </head>
-    <body>
-      <a class="sr-only skip-link" href="#adminMain">Pomiń do treści</a>
-      <main id="adminMain" role="main">
-        <h2>Panel danych (tylko Zarząd)</h2>
-
-        <section class="form-section" aria-labelledby="pojazdTitle">
-          <h3 id="pojazdTitle">Dodaj / Edytuj pojazd</h3>
-          <form id="pojazdForm" aria-describedby="pojazdNote">
-            <p id="pojazdNote" class="sr-only">Formularz do dodawania lub edycji pojazdów</p>
-            <label class="sr-only" for="p_id">Id (opcjonalne)</label>
-            <input id="p_id" name="id" placeholder="id (opcjonalne)"><br>
-            <label class="sr-only" for="p_nr">Numer rejestracyjny</label>
-            <input id="p_nr" name="nr_rejestracyjny" placeholder="nr_rejestracyjny" required><br>
-            <label class="sr-only" for="p_marka">Marka</label>
-            <input id="p_marka" name="marka" placeholder="marka"><br>
-            <label class="sr-only" for="p_model">Model</label>
-            <input id="p_model" name="model" placeholder="model"><br>
-            <label class="sr-only" for="p_rok">Rok produkcji</label>
-            <input id="p_rok" name="rok_produkcji" placeholder="rok_produkcji" type="number"><br>
-            <label><input id="p_sprawny" name="sprawny" type="checkbox" checked> Sprawny</label><br>
-            <button type="submit">Zapisz pojazd</button>
-          </form>
-          <pre id="pojazdResult" role="status" aria-live="polite"></pre>
-        </section>
-
-        <!-- analogicznie dla pracownika, rejestracji i grafiku: etykiety .sr-only -->
-        <section class="form-section" aria-labelledby="pracTitle">
-          <h3 id="pracTitle">Dodaj pracownika</h3>
-          <form id="pracForm">
-            <label class="sr-only" for="pr_imie">Imię</label><input id="pr_imie" name="imie" placeholder="Imię" required><br>
-            <label class="sr-only" for="pr_nazw">Nazwisko</label><input id="pr_nazw" name="nazwisko" placeholder="Nazwisko" required><br>
-            <label class="sr-only" for="pr_login">Login</label><input id="pr_login" name="login" placeholder="login" required><br>
-            <label class="sr-only" for="pr_haslo">Hasło</label><input id="pr_haslo" name="haslo" placeholder="hasło" required><br>
-            <label class="sr-only" for="pr_stan">Stanowisko id</label><input id="pr_stan" name="stanowisko_id" placeholder="stanowisko_id" type="number" required><br>
-            <label class="sr-only" for="pr_up">Uprawnienie id</label><input id="pr_up" name="uprawnienie_id" placeholder="uprawnienie_id" type="number" required><br>
-            <button type="submit">Dodaj pracownika</button>
-          </form>
-          <pre id="pracResult" role="status" aria-live="polite"></pre>
-        </section>
-
-        <section class="form-section" aria-labelledby="rejTitle">
-          <h3 id="rejTitle">Dodaj rejestrację</h3>
-          <form id="rejForm">
-            <label class="sr-only" for="r_poj">Id pojazdu</label><input id="r_poj" name="id_pojazdu" placeholder="id_pojazdu" required><br>
-            <label class="sr-only" for="r_rej">Rejestracja</label><input id="r_rej" name="rejestracja" placeholder="rejestracja" required><br>
-            <button type="submit">Dodaj rejestrację</button>
-          </form>
-          <pre id="rejResult" role="status" aria-live="polite"></pre>
-        </section>
-
-        <section class="form-section" aria-labelledby="grafTitle">
-          <h3 id="grafTitle">Dodaj wpis grafiku</h3>
-          <form id="grafForm">
-            <label class="sr-only" for="g_pr">Id pracownika</label><input id="g_pr" name="pracownik_id" placeholder="pracownik_id" required><br>
-            <label class="sr-only" for="g_data">Data</label><input id="g_data" name="data" placeholder="data YYYY-MM-DD" required><br>
-            <label class="sr-only" for="g_bry">Brygada id</label><input id="g_bry" name="brygada_id" placeholder="brygada_id (opcjonalne)"><br>
-            <label class="sr-only" for="g_poj">Pojazd id</label><input id="g_poj" name="pojazd_id" placeholder="pojazd_id (opcjonalne)"><br>
-            <button type="submit">Dodaj grafik</button>
-          </form>
-          <pre id="grafResult" role="status" aria-live="polite"></pre>
-        </section>
-
-      </main>
-
-      <script>
-        const token = localStorage.getItem('ostrans_token');
-        function apiPost(path, body) {
-          return fetch(path, {
-            method:'POST',
-            headers: { 'Content-Type':'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
-            body: JSON.stringify(body)
-          }).then(r => r.json().catch(()=>({status:r.status, text:r.statusText})));
-        }
-
-        document.getElementById('pojazdForm').addEventListener('submit', async (e)=>{
-          e.preventDefault();
-          const f = Object.fromEntries(new FormData(e.target).entries());
-          f.sprawny = e.target.sprawny.checked;
-          const res = await apiPost('/api/admin/pojazd', f);
-          document.getElementById('pojazdResult').textContent = JSON.stringify(res, null, 2);
-        });
-
-        document.getElementById('pracForm').addEventListener('submit', async (e)=>{
-          e.preventDefault();
-          const f = Object.fromEntries(new FormData(e.target).entries());
-          const res = await apiPost('/api/admin/pracownik', f);
-          document.getElementById('pracResult').textContent = JSON.stringify(res, null, 2);
-        });
-
-        document.getElementById('rejForm').addEventListener('submit', async (e)=>{
-          e.preventDefault();
-          const f = Object.fromEntries(new FormData(e.target).entries());
-          const res = await apiPost('/api/admin/rejestracja', f);
-          document.getElementById('rejResult').textContent = JSON.stringify(res, null, 2);
-        });
-
-        document.getElementById('grafForm').addEventListener('submit', async (e)=>{
-          e.preventDefault();
-          const f = Object.fromEntries(new FormData(e.target).entries());
-          const res = await apiPost('/api/admin/grafik', f);
-          document.getElementById('grafResult').textContent = JSON.stringify(res, null, 2);
-        });
-      </script>
-    </body></html>
-  `);
+  res.sendFile(path.join(__dirname,'admin','index.html'));
 });
 
 // --- API: dodawanie danych (tylko zarzad) ---
@@ -421,6 +428,80 @@ app.post('/api/admin/grafik', authMiddleware, requireZarzad, async (req, res) =>
     await db.query('INSERT INTO grafiki (pracownik_id, data, brygada_id, pojazd_id) VALUES ($1,$2,$3,$4)', [parseInt(pracownik_id,10), data, brygada_id ? parseInt(brygada_id,10) : null, pojazd_id ? parseInt(pojazd_id,10) : null]);
     res.json({ ok:true });
   } catch (err) { console.error(err); res.status(500).json({ error:'server' }); }
+});
+
+// --- ADDITIONAL API GET ENDPOINTS ---
+app.get('/api/pojazdy', authMiddleware, async (req, res) => {
+  try {
+    const q = await db.query('SELECT * FROM pojazdy ORDER BY id');
+    res.json(q.rows);
+  } catch (e) { console.error(e); res.status(500).json([]); }
+});
+
+app.get('/api/grafik', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (userId) {
+      const q = await db.query('SELECT * FROM grafiki WHERE pracownik_id=$1 ORDER BY data', [parseInt(userId,10)]);
+      return res.json(q.rows);
+    }
+    const q = await db.query('SELECT * FROM grafiki ORDER BY data LIMIT 500');
+    res.json(q.rows);
+  } catch (e) { console.error(e); res.status(500).json([]); }
+});
+
+app.get('/api/linie', authMiddleware, async (req, res) => {
+  try {
+    const q = await db.query('SELECT * FROM linie ORDER BY id');
+    res.json(q.rows);
+  } catch (e) { console.error(e); res.status(500).json([]); }
+});
+
+app.get('/api/pracownicy', authMiddleware, requireZarzad, async (req, res) => {
+  try {
+    const q = await db.query('SELECT p.id,p.imie,p.nazwisko,p.login,u.poziom as uprawnienie FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id ORDER BY p.id');
+    res.json(q.rows);
+  } catch (e) { console.error(e); res.status(500).json([]); }
+});
+
+// Endpoint do ręcznego/automatycznego odświeżenia roli użytkownika z Discord (używa bot token)
+app.post('/api/sync-role', authMiddleware, async (req, res) => {
+  try {
+    // pobierz discord_id pracownika z DB
+    const q = await db.query('SELECT discord_id FROM pracownicy WHERE id=$1 LIMIT 1', [req.user.id]);
+    if (q.rowCount === 0) return res.status(404).json({ error: 'no user' });
+    const discordId = q.rows[0].discord_id;
+    if (!discordId) return res.status(400).json({ error: 'no discord_id' });
+
+    const guildId = process.env.DISCORD_GUILD_ID;
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+    if (!guildId || !botToken) return res.status(500).json({ error: 'discord guild/bot not configured' });
+
+    const memberRes = await fetch(`https://discord.com/api/guilds/${guildId}/members/${discordId}`, {
+      headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' }
+    });
+    if (!memberRes.ok) return res.status(500).json({ error: 'failed to fetch member' });
+    const member = await memberRes.json();
+    const roles = Array.isArray(member.roles) ? member.roles : [];
+    const roleZ = process.env.ROLE_ZARZAD_ID;
+    const roleD = process.env.ROLE_DYSP_ID;
+    const roleK = process.env.ROLE_KIEROWCA_ID;
+    let mapped = 'kierowca';
+    if (roleZ && roles.includes(roleZ)) mapped = 'zarzad';
+    else if (roleD && roles.includes(roleD)) mapped = 'dyspozytor';
+    else if (roleK && roles.includes(roleK)) mapped = 'kierowca';
+
+    // get uprawnienie_id
+    const upq = await db.query('SELECT id FROM uprawnienia WHERE poziom=$1 LIMIT 1', [mapped]);
+    const upId = upq.rowCount ? upq.rows[0].id : null;
+    if (upId) {
+      await db.query('UPDATE pracownicy SET uprawnienie_id=$1 WHERE id=$2', [upId, req.user.id]);
+    }
+    res.json({ ok:true, uprawnienie: mapped });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error:'server' });
+  }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

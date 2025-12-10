@@ -296,6 +296,32 @@ function tryDemoUsers() {
   }
 })();
 
+// handle token passed in URL (after OAuth redirect)
+(function grabTokenFromUrl(){
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('token');
+    if (t) {
+      localStorage.setItem(TOKEN_KEY, t);
+      // remove token from URL for cleanliness
+      params.delete('token');
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash;
+      history.replaceState({}, '', newUrl);
+      // optionally fetch /api/me to get user and show dashboard
+      (async ()=>{
+        try {
+          const me = await authFetch('/api/me');
+          localStorage.setItem(USER_KEY, JSON.stringify(me.user));
+          showDashboardFor(me.user);
+        } catch(_) {
+          // if fetch fails, rely on demo or reload to server-rendered panel
+          // location.reload();
+        }
+      })();
+    }
+  } catch(e){ /* ignore */ }
+})();
+
 /* --- ADMIN PANEL LINK --- */
 document.addEventListener('click', () => {
   const btn = document.getElementById('openAdminPanel');

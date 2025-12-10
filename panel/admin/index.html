@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>Panel danych — Ostrans (Admin)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../employee.css">
+</head>
+<body>
+  <main role="main" style="max-width:900px;margin:28px auto;padding:18px">
+    <h2>Panel danych (tylko Zarząd)</h2>
+    <p class="small-muted">Upewnij się, że jesteś zalogowany. Formularze wysyłają żądania do /api/admin/* z tokenem w Authorization.</p>
+
+    <section aria-labelledby="pojazdTitle">
+      <h3 id="pojazdTitle">Dodaj / Edytuj pojazd</h3>
+      <form id="pojazdForm">
+        <input name="id" placeholder="id (opcjonalne)">
+        <input name="nr_rejestracyjny" placeholder="nr_rejestracyjny" required>
+        <input name="marka" placeholder="marka">
+        <input name="model" placeholder="model">
+        <input name="rok_produkcji" type="number" placeholder="rok_produkcji">
+        <label><input name="sprawny" type="checkbox" checked> Sprawny</label><br>
+        <button type="submit">Zapisz pojazd</button>
+      </form>
+      <pre id="pojazdResult" role="status" aria-live="polite"></pre>
+    </section>
+
+    <section aria-labelledby="pracTitle">
+      <h3 id="pracTitle">Dodaj pracownika</h3>
+      <form id="pracForm">
+        <input name="imie" placeholder="Imię" required>
+        <input name="nazwisko" placeholder="Nazwisko" required>
+        <input name="login" placeholder="login" required>
+        <input name="haslo" placeholder="hasło" required>
+        <input name="stanowisko_id" type="number" placeholder="stanowisko_id" required>
+        <input name="uprawnienie_id" type="number" placeholder="uprawnienie_id" required>
+        <input name="discord_id" placeholder="discord_id (opcjonalne)">
+        <button type="submit">Dodaj pracownika</button>
+      </form>
+      <pre id="pracResult" role="status" aria-live="polite"></pre>
+    </section>
+
+    <section aria-labelledby="grafTitle">
+      <h3 id="grafTitle">Dodaj wpis grafiku</h3>
+      <form id="grafForm">
+        <input name="pracownik_id" placeholder="pracownik_id" required>
+        <input name="data" placeholder="data YYYY-MM-DD" required>
+        <input name="brygada_id" placeholder="brygada_id (opcjonalne)">
+        <input name="pojazd_id" placeholder="pojazd_id (opcjonalne)">
+        <button type="submit">Dodaj grafik</button>
+      </form>
+      <pre id="grafResult" role="status" aria-live="polite"></pre>
+    </section>
+
+    <script>
+      const token = localStorage.getItem('ostrans_token');
+      async function apiPost(path, body) {
+        return fetch(path, {
+          method:'POST',
+          headers: { 'Content-Type':'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
+          body: JSON.stringify(body)
+        }).then(r => r.json().catch(()=>({status:r.status, text:r.statusText})));
+      }
+
+      document.getElementById('pojazdForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(e.target).entries());
+        f.sprawny = e.target.sprawny.checked;
+        const res = await apiPost('/api/admin/pojazd', f);
+        document.getElementById('pojazdResult').textContent = JSON.stringify(res, null, 2);
+      });
+
+      document.getElementById('pracForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(e.target).entries());
+        const res = await apiPost('/api/admin/pracownik', f);
+        document.getElementById('pracResult').textContent = JSON.stringify(res, null, 2);
+      });
+
+      document.getElementById('grafForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(e.target).entries());
+        const res = await apiPost('/api/admin/grafik', f);
+        document.getElementById('grafResult').textContent = JSON.stringify(res, null, 2);
+      });
+    </script>
+  </main>
+</body>
+</html>
