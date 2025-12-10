@@ -28,6 +28,15 @@ const db = {
 // add base site address constant (used in generated pages)
 const MAIN_SITE = process.env.MAIN_SITE || 'https://ostrans.famisska.pl';
 
+// --- Prosty redirect do Discord OAuth ---
+app.get('/auth/discord', (req, res) => {
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const redirectUri = process.env.DISCORD_REDIRECT_URI || `${MAIN_SITE}/auth/discord/callback`;
+  if (!clientId) return res.status(500).send('DISCORD_CLIENT_ID not configured');
+  const url = `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20email`;
+  res.redirect(url);
+});
+
 // uploads folder for zgłoszenia
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });

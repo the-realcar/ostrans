@@ -44,7 +44,7 @@ function notify(msg, type = 'info') {
 /* small CSS class .sr-visible działa przez employee.css (możesz dodać jeśli chcesz widoczność) */
 
 /* --- LOGIN (backend) --- */
-document.getElementById('doLogin').addEventListener('click', async () => {
+document.getElementById('doLogin')?.addEventListener('click', async () => {
   const login = document.getElementById('loginInput').value.trim();
   const pass = document.getElementById('passInput').value;
   if (!login || !pass) { notify('Podaj login i hasło.', 'error'); return; }
@@ -58,10 +58,15 @@ document.getElementById('doLogin').addEventListener('click', async () => {
     const { token, user } = await res.json();
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
-    // reveal dashboard
-    document.getElementById('authWrapper').style.display = 'none';
-    document.getElementById('dashboard').classList.remove('hidden');
-    document.getElementById('dashboard').setAttribute('aria-hidden','false');
+    // reveal dashboard (if PHP rendered page, just reload to get session-based view)
+    if (window.OSTRANS_USER) {
+      notify('Zalogowano (serwer).', 'success');
+      location.reload();
+      return;
+    }
+    // otherwise client side show
+    document.getElementById('authWrapper')?.setAttribute('style','display:none');
+    document.getElementById('dashboard')?.classList.remove('hidden');
     showDashboardFor(user);
     notify('Zalogowano pomyślnie.', 'success');
   } catch (err) {
@@ -76,11 +81,8 @@ document.getElementById('doLogin').addEventListener('click', async () => {
   }
 });
 
-/* Discord OAuth link (serwer powinien obsłużyć wymianę kodu) */
-const discordClientId = 'YOUR_DISCORD_CLIENT_ID';
-const redirectUri = encodeURIComponent('http://localhost:3000/auth/discord/callback'); // dopasuj
-document.getElementById('discordLogin').href =
-  `https://discord.com/api/oauth2/authorize?client_id=${discordClientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify%20email`;
+/* Discord OAuth link: leave server-driven; remove hardcoded client id if any */
+document.getElementById('discordLogin')?.setAttribute('href', '/auth/discord');
 
 /* --- LOGOUT --- */
 document.getElementById('logoutBtn').addEventListener('click', () => {

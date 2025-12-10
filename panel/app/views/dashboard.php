@@ -2,39 +2,26 @@
 <html lang="pl">
 <head>
   <meta charset="utf-8">
-  <title>Panel pracowników — Ostrans</title>
+  <title>Panel — dashboard</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="../employee.css">
+  <link rel="stylesheet" href="/panel/employee.css">
 </head>
 <body>
   <header class="panel-header">
     <div class="logo-title">
-      <a href="https://ostrans.famisska.pl"><img src="https://ostrans.famisska.pl/logo.png" alt="Logo"></a>
+      <a href="/"><img src="https://ostrans.famisska.pl/logo.png" alt="Logo"></a>
       <span>Panel pracowników — PPUT Ostrans</span>
     </div>
-    <nav><a href="https://ostrans.famisska.pl">Strona główna</a></nav>
+    <nav><a href="/">Strona główna</a></nav>
   </header>
 
   <main class="panel-main">
-    <div id="authWrapper">
-      <div class="auth-panel" id="loginPanel">
-        <h3>Logowanie</h3>
-        <input id="loginInput" placeholder="Login" />
-        <input id="passInput" type="password" placeholder="Hasło" />
-        <button id="doLogin">Zaloguj</button>
-        <div class="oauth">
-          <a id="discordLogin" href="#" title="Logowanie przez Discord">Zaloguj przez Discord</a>
-        </div>
-        <p class="small-muted">Demo: driver1/dpass, dispo1/dpass, admin1/dpass</p>
-      </div>
-    </div>
-
-    <div id="dashboard" class="dashboard hidden">
+    <div id="dashboard" class="dashboard">
       <div class="dash-top">
         <h2 id="dashTitle">Panel</h2>
         <div>
-          <span id="currentUser" class="small-muted"></span>
-          <button id="logoutBtn">Wyloguj</button>
+          <span id="currentUser" class="small-muted"><?=htmlspecialchars(($user['imie'] ?? $user['login']) . ' ' . ($user['nazwisko'] ?? ''))?> (<?=htmlspecialchars($user['uprawnienie'] ?? '')?>)</span>
+          <a href="?route=logout"><button id="logoutBtn">Wyloguj</button></a>
         </div>
       </div>
 
@@ -73,10 +60,10 @@
     </div>
   </main>
 
-  <footer class="panel-footer">
-    <p>PPUT Ostrans • Panel pracowników</p>
-  </footer>
-
-  <script src="../panel.js"></script>
+  <script>
+    // expose minimal user info for existing panel.js
+    window.OSTRANS_USER = <?=json_encode($user)?>;
+  </script>
+  <script src="/panel/panel.js"></script>
 </body>
 </html>
