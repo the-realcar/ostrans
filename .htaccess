@@ -1,0 +1,9 @@
+RewriteEngine On
+
+# Jeśli żądanie kończy się na .html i istnieje odpowiadający .php, przekieruj 301 na .php
+RewriteCond %{REQUEST_URI} ^/(.*)\.html$ [NC]
+RewriteCond %{DOCUMENT_ROOT}/%1.php -f
+RewriteRule ^(.*)\.html$ /$1.php [R=301,L]
+
+# Opcjonalnie: zapobiegaj pętli jeśli plik .php sam przekierowuje
+# (dodatkowe reguły można dodać później)

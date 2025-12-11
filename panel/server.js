@@ -149,7 +149,7 @@ app.get('/auth/discord/callback', async (req, res) => {
     // sign JWT (include uprawnienie)
     const token = jwt.sign({ id: user.id, login: user.login, uprawnienie: user.uprawnienie || mappedUprawnienie }, JWT_SECRET, { expiresIn: '8h' });
     // redirect to panel with token in query (frontend will store it)
-    const redirectTo = `${MAIN_SITE.replace(/\/$/,'')}/panel/index.html?token=${encodeURIComponent(token)}`;
+    const redirectTo = `${MAIN_SITE.replace(/\/$/,'')}/panel/index.php?token=${encodeURIComponent(token)}`;
     return res.redirect(redirectTo);
   } catch (e) {
     console.error(e);
@@ -351,10 +351,10 @@ app.get('/api/raporty/cancelled', authMiddleware, async (req, res) => {
 // Proste serwowanie stron panelu zgodnie z wymaganiami (kierowca/dyspozytor/zarzad)
 app.get('/panel/grafik', authMiddleware, (req,res) => {
   // only drivers+dyspozytor+zarzad
-  res.sendFile(path.join(__dirname,'main','index.html')); // uses existing file as base grafik page
+  res.sendFile(path.join(__dirname,'main','index.php')); // uses existing file as base grafik page
 });
 app.get('/panel/wnioski', authMiddleware, (req,res) => {
-  res.sendFile(path.join(__dirname,'index.html')); // main panel index includes wnioski form
+  res.sendFile(path.join(__dirname,'index.php')); // main panel index includes wnioski form
 });
 app.get('/panel/raporty', authMiddleware, (req,res) => {
   // simple listing page (frontend can call /api/raporty/*)
@@ -370,7 +370,7 @@ app.get('/panel/wyslij-raport', authMiddleware, (req,res) => {
 // --- STRONA ADMINA (formularze) ---
 app.get('/admin', authMiddleware, (req, res) => {
   if (req.user.uprawnienie !== 'zarzad') return res.status(403).send('Forbidden');
-  res.sendFile(path.join(__dirname,'admin','index.html'));
+  res.sendFile(path.join(__dirname,'admin','index.php'));
 });
 
 // --- API: dodawanie danych (tylko zarzad) ---
