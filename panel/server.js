@@ -11,6 +11,28 @@ const multer = require('multer');
 const fs = require('fs');
 require('dotenv').config();
 const path = require('path');
+
+// --- LOAD env.txt FALLBACK (jeśli .env nie jest używany) ---
+(function loadEnvTxt() {
+  const envPath = path.join(__dirname, '..', 'env.txt'); // repo root env.txt
+  try {
+    if (fs.existsSync(envPath)) {
+      const txt = fs.readFileSync(envPath, 'utf8');
+      txt.split(/\r?\n/).forEach(line => {
+        line = line.trim();
+        if (!line || line.startsWith('#') || line.indexOf('=') === -1) return;
+        const [k, ...rest] = line.split('=');
+        let v = rest.join('=').trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+        if (!(k in process.env) || !process.env[k]) process.env[k] = v;
+      });
+      console.log('Loaded env.txt into process.env (fallback).');
+    }
+  } catch (e) {
+    console.warn('Failed to load env.txt fallback:', e && e.message);
+  }
+})();
+
 const { Pool } = require('pg');
 
 const app = express();
@@ -32,8 +54,12 @@ const MAIN_SITE = process.env.MAIN_SITE || 'https://ostrans.famisska.pl';
 app.get('/auth/discord', (req, res) => {
   const clientId = process.env.DISCORD_CLIENT_ID;
   const redirectUri = process.env.DISCORD_REDIRECT_URI || `${MAIN_SITE}/auth/discord/callback`;
-  if (!clientId) return res.status(500).send('DISCORD_CLIENT_ID not configured');
+  if (!clientId) {
+    console.error('DISCORD_CLIENT_ID not configured. Check .env or env.txt');
+    return res.status(500).send('DISCORD_CLIENT_ID not configured');
+  }
   const url = `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=identify%20email`;
+  console.log('Redirecting to Discord OAuth:', url);
   res.redirect(url);
 });
 
