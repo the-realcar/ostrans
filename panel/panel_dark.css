@@ -34,6 +34,30 @@ html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;back
 .file-slot{border:1px dashed rgba(255,255,255,0.04);padding:8px;border-radius:8px}
 .notice{background:rgba(255,255,255,0.02);padding:8px;border-radius:6px;color:var(--muted)}
 a.primary{color:var(--accent)}
+
+/* Buttons for dark theme */
+button, .btn {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.04);
+  background: var(--accent-2);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* secondary / alt style */
+button.alt, .btn.alt { background: transparent; border: 1px solid rgba(255,255,255,0.06); color: var(--text); }
+
+/* Hover / disabled / focus */
+button:hover, .btn:hover { opacity: 0.95; }
+button[disabled], .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+button:focus, .btn:focus { outline: 3px solid var(--focus); outline-offset: 2px; }
+
 /* focus */
 button:focus,input:focus,select:focus,textarea:focus{outline:3px solid var(--focus);outline-offset:2px}
 @media(max-width:720px){.day{min-width:100px}}

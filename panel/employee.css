@@ -20,6 +20,41 @@ body{font-family:Quicksand,Arial,sans-serif;background:#f5f7fa;color:#222;margin
 .role-view.hidden{display:none}
 .panel-footer{text-align:center;padding:18px;background:#fff;margin-top:18px;border-top:1px solid #eee}
 
+/* Normalize & style buttons in panel (fix: buttons had inconsistent browser defaults) */
+button, .btn {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  display: inline-block;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.2;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: var(--blue);
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+/* Hover / active */
+button:hover, .btn:hover { opacity: 0.95; transform: none; }
+
+/* Disabled */
+button[disabled], .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+/* Keep explicit overrides for specific areas (nav-role etc.) possible */
+.nav-role button { /* ...existing code may override this... */ }
+
+/* Focus (high-contrast, accessible) */
+button:focus, .btn:focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 /* Dostępność: skip link */
 .skip-link{
   position:absolute;
