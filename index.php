@@ -69,7 +69,7 @@
     <button id="themeToggle" type="button" aria-label="Przełącz motyw" aria-pressed="false" style="margin-left:12px">Motyw</button>
     <nav>
       <a href="https://ostrans.famisska.pl/pracuj">Pracuj z nami</a>
-      <a href="https://ostrans.famisska.pl/linie">Linie</a>
+      <a href="/linie">Linie</a>
       <a href="https://ostrans.famisska.pl/aktualnosci">Aktualności</a>
     </nav>
   </header>
@@ -105,7 +105,7 @@
       <p>Ostrans to prywatna firma oferująca usługi transportowe. Operujemy w Ostrołęce i okolicach dla MZK Ostrołęka. Firma została założona 16 października 2022 roku i jest prowadzona do dnia dzisiejszego. Posiadamy w naszej ofercie duży tabor przystosowany do najnowszych standardów. Ponad 90% naszej floty jest niskopodłogowa i gotowa na transport osób niepełnosprawnych. Jesteśmy również jedyną firmą z całodniowymi rozkładami jazdy. Więc na co czekasz? Wypełnij formularz o pracę i się skontaktujemy z Tobą!</p>
       <div class="cta">
         <a class="btn" href="https://ostrans.famisska.pl/pracuj">Pracuj z nami</a>
-        <a class="btn alt" href="https://ostrans.famisska.pl/linie">Linie</a>
+        <a class="btn alt" href="/linie">Linie</a>
         <a class="btn alt" href="https://ostrans.famisska.pl/aktualnosci">Aktualności</a>
       </div>
     </section>

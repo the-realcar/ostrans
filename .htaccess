@@ -1,5 +1,8 @@
 RewriteEngine On
 
+# Pretty route for lines list: /linie -> /linie.php
+RewriteRule ^linie/?$ /linie.php [L,QSA]
+
 # Linie routing: /linie/XXX-YY.php -> linie/index.php (dynamic handler)
 RewriteCond %{REQUEST_URI} ^/linie/[^/]+\.php$ [NC]
 RewriteRule ^linie/(.+)\.php$ /linie/index.php [L,QSA]

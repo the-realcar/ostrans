@@ -11,9 +11,9 @@ $lineNum = $parts[0] ?? '';
 $variantId = $parts[1] ?? '01';
 
 if (!$lineNum) {
-    http_response_code(404);
-    echo '<!doctype html><html><head><meta charset="utf-8"><title>404</title></head><body><h1>404 - Linia nie znaleziona</h1><p><a href="/linie.php">Powrót do listy linii</a></p></body></html>';
-    exit;
+  http_response_code(404);
+  echo '<!doctype html><html><head><meta charset="utf-8"><title>404</title></head><body><h1>404 - Linia nie znaleziona</h1><p><a href="/linie">Powrót do listy linii</a></p></body></html>';
+  exit;
 }
 
 // Fetch line data from SIL API
@@ -27,9 +27,9 @@ $lineVariants = array_filter($allLines, function($l) use ($lineNum) {
 });
 
 if (empty($lineVariants)) {
-    http_response_code(404);
-    echo '<!doctype html><html><head><meta charset="utf-8"><title>404</title></head><body><h1>404 - Linia nie znaleziona</h1><p><a href="/linie.php">Powrót do listy linii</a></p></body></html>';
-    exit;
+  http_response_code(404);
+  echo '<!doctype html><html><head><meta charset="utf-8"><title>404</title></head><body><h1>404 - Linia nie znaleziona</h1><p><a href="/linie">Powrót do listy linii</a></p></body></html>';
+  exit;
 }
 
 // Find the requested variant
@@ -152,14 +152,14 @@ $pageTitle = "$typeLabel $lineNum — PPUT Ostrans";
     <button id="themeToggle" type="button" aria-label="Przełącz motyw" aria-pressed="false">Motyw</button>
     <nav>
       <a href="/">Strona główna</a>
-      <a href="/linie.php">Linie</a>
+      <a href="/linie">Linie</a>
       <a href="/panel/index.php">Panel pracowników</a>
     </nav>
   </header>
 
   <main>
     <div class="breadcrumb">
-      <a href="/">Strona główna</a> / <a href="/linie.php">Linie</a> / <?= htmlspecialchars("$typeLabel $lineNum") ?>
+      <a href="/">Strona główna</a> / <a href="/linie">Linie</a> / <?= htmlspecialchars("$typeLabel $lineNum") ?>
     </div>
 
     <div class="line-header">

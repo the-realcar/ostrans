@@ -76,7 +76,7 @@
     <button id="themeToggle" type="button" aria-label="Przełącz motyw" aria-pressed="false" style="margin-left:12px">Motyw</button>
     <nav>
       <a href="/">Strona główna</a>
-      <a href="/linie.php">Linie</a>
+      <a href="/linie">Linie</a>
       <a href="/panel/index.php">Panel pracowników</a>
     </nav>
   </header>
@@ -95,6 +95,10 @@
     $apiUrl = 'https://sil.kanbeq.me/ostrans/api/lines';
     $linesData = @file_get_contents($apiUrl);
     $lines = $linesData ? json_decode($linesData, true) : [];
+
+    if (!$lines) {
+      echo '<p style="color:var(--muted)">Brak danych linii (API niedostępne?). Spróbuj ponownie później.</p>';
+    }
 
     // Group by type
     $grouped = ['tram' => [], 'trol' => [], 'bus' => []];
@@ -130,7 +134,7 @@
       if (empty($linesInType)) continue;
     ?>
     <div class="line-group">
-      <h2><?= htmlspecialchars($typeLabels[$type]) ?></h2>
+      <h2><?= htmlspecialchars($typeLabels[$type] ?? ucfirst($type)) ?></h2>
       <div class="line-grid">
         <?php foreach ($linesInType as $lineNum => $variants): 
           // Use first variant to get base info
