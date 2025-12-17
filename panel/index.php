@@ -3,9 +3,11 @@ session_start();
 
 require_once __DIR__ . '/app/core/Database.php';
 require_once __DIR__ . '/app/controllers/HomeController.php';
+require_once __DIR__ . '/app/controllers/PanelController.php';
 
 $db = new App\Core\Database();
 $controller = new App\Controllers\HomeController($db);
+$panel = new App\Controllers\PanelController($db);
 
 $route = $_GET['route'] ?? 'home';
 
@@ -21,6 +23,14 @@ if ($route === 'dashboard') {
     $controller->dashboard();
     exit;
 }
+
+// Dynamic panel pages
+if ($route === 'grafik') { $panel->grafik(); exit; }
+if ($route === 'wnioski') { $panel->wnioski(); exit; }
+if ($route === 'raporty') { $panel->raporty(); exit; }
+if ($route === 'zgloszenia') { $panel->zgloszenia(); exit; }
+if ($route === 'wyslij-raport') { $panel->wyslijRaport(); exit; }
+if ($route === 'admin') { $panel->admin(); exit; }
 
 // Serve embedded HTML (previously index.html) for home route and inject session user as JS
 if ($route === 'home') {

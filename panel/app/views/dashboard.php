@@ -27,8 +27,12 @@
 
       <div class="nav-role">
         <button data-show="driverView">Kierowca</button>
+        <?php if (in_array($user['uprawnienie'] ?? '', ['dyspozytor', 'zarzad'])): ?>
         <button data-show="dispoView">Dyspozytor</button>
+        <?php endif; ?>
+        <?php if (($user['uprawnienie'] ?? '') === 'zarzad'): ?>
         <button data-show="adminView">Zarząd</button>
+        <?php endif; ?>
       </div>
 
       <div id="driverView" class="panel role-view hidden">
