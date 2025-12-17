@@ -64,6 +64,6 @@
     // expose minimal user info for existing panel.js
     window.OSTRANS_USER = <?=json_encode($user)?>;
   </script>
-  <script src="/panel/panel.js"></script>
+  <script src="/panel/panel.php"></script>
 </body>
 </html>

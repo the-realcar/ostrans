@@ -33,19 +33,13 @@ const path = require('path');
   }
 })();
 
-const { Pool } = require('pg');
+// Use centralized DB helper
 
 const app = express();
 app.use(bodyParser.json());
 
-// --- Konfiguracja bazy danych (Pool) ---
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.PG_CONNECTION || 'postgresql://user:pass@localhost:5432/ostrans'
-});
-const db = {
-  query: (text, params) => pool.query(text, params),
-  pool
-};
+// --- Konfiguracja bazy danych: użyj istniejącego modułu baza_danych.js ---
+const db = require(path.join(__dirname, '..', 'baza_danych'));
 
 // add base site address constant (used in generated pages)
 const MAIN_SITE = process.env.MAIN_SITE || 'https://ostrans.famisska.pl';
@@ -377,20 +371,19 @@ app.get('/api/raporty/cancelled', authMiddleware, async (req, res) => {
 // Proste serwowanie stron panelu zgodnie z wymaganiami (kierowca/dyspozytor/zarzad)
 app.get('/panel/grafik', authMiddleware, (req,res) => {
   // only drivers+dyspozytor+zarzad
-  res.sendFile(path.join(__dirname,'main','index.php')); // uses existing file as base grafik page
+  res.sendFile(path.join(__dirname,'grafik.html'));
 });
 app.get('/panel/wnioski', authMiddleware, (req,res) => {
-  res.sendFile(path.join(__dirname,'index.php')); // main panel index includes wnioski form
+  res.sendFile(path.join(__dirname,'wnioski.html'));
 });
 app.get('/panel/raporty', authMiddleware, (req,res) => {
-  // simple listing page (frontend can call /api/raporty/*)
-  res.send(`<html><head><meta charset="utf-8"><title>Raporty</title></head><body><h2>Raporty</h2><p>Użyj /api/raporty/* endpointów</p></body></html>`);
+  res.sendFile(path.join(__dirname,'raporty.html'));
 });
 app.get('/panel/zgloszenia', authMiddleware, (req,res) => {
-  res.send(`<html><head><meta charset="utf-8"><title>Zgłoszenia</title></head><body><h2>Zgłoszenia</h2><p>Formularz dostępny w panelu — wysyłaj na /api/zgloszenia</p></body></html>`);
+  res.sendFile(path.join(__dirname,'zgloszenia.html'));
 });
 app.get('/panel/wyslij-raport', authMiddleware, (req,res) => {
-  res.send(`<html><head><meta charset="utf-8"><title>Wyślij raport</title></head><body><h2>Wyślij raport</h2><p>Strona do wysyłki raportów (frontend -> /api/raporty)</p></body></html>`);
+  res.sendFile(path.join(__dirname,'wyslij-raport.html'));
 });
 
 // --- STRONA ADMINA (formularze) ---

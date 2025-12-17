@@ -8,3 +8,6 @@ RewriteRule ^(.*)\.html$ /$1.php [R=301,L]
 # mapowanie ładnych ścieżek OAuth do plików PHP
 RewriteRule ^auth/discord/?$ /auth/discord.php [L,QSA]
 RewriteRule ^auth/discord/callback/?$ /auth/discord_callback.php [L,QSA]
+
+# API -> panel/api.php
+RewriteRule ^api/(.*)$ /panel/api.php [L,QSA]
