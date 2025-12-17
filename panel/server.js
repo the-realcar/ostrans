@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt'); // jeśli hasła będą haszowane
 const fetch = require('node-fetch');
 const multer = require('multer');
+const { Pool } = require('pg');
 const fs = require('fs');
 require('dotenv').config();
 const path = require('path');
@@ -33,13 +34,17 @@ const path = require('path');
   }
 })();
 
-// Use centralized DB helper
-
 const app = express();
 app.use(bodyParser.json());
 
-// --- Konfiguracja bazy danych: użyj istniejącego modułu baza_danych.js ---
-const db = require(path.join(__dirname, '..', 'baza_danych'));
+// --- Połączenie z PostgreSQL (przeniesione z baza_danych.js) ---
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || process.env.PG_CONNECTION || 'postgresql://user:pass@localhost:5432/ostrans'
+});
+const db = {
+  query: (text, params) => pool.query(text, params),
+  pool
+};
 
 // add base site address constant (used in generated pages)
 const MAIN_SITE = process.env.MAIN_SITE || 'https://ostrans.famisska.pl';
