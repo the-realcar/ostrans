@@ -47,7 +47,13 @@ button:hover, .btn:hover { opacity: 0.95; transform: none; }
 button[disabled], .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
 
 /* Keep explicit overrides for specific areas (nav-role etc.) possible */
-.nav-role button { /* ...existing code may override this... */ }
+.nav-role button {
+  background: #fff;
+  color: #222;
+  border: 1px solid #ddd;
+  box-shadow: none;
+  padding: 8px 12px;
+}
 
 /* Focus (high-contrast, accessible) */
 button:focus, .btn:focus {
