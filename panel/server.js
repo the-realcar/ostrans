@@ -13,6 +13,12 @@ const fs = require('fs');
 require('dotenv').config();
 const path = require('path');
 
+// Deprecated: API przeniesione do PHP (panel/api.php). Domyślnie wyłączamy Node backend, żeby nie łączył się z bazą.
+if (!process.env.ENABLE_NODE_SERVER) {
+  console.warn('server.js wyłączony — użyj PHP (panel/api.php). Ustaw ENABLE_NODE_SERVER=1 jeśli musisz uruchomić wersję Node.');
+  process.exit(0);
+}
+
 // --- LOAD env.txt FALLBACK (jeśli .env nie jest używany) ---
 (function loadEnvTxt() {
   const envPath = path.join(__dirname, '..', 'env.txt'); // repo root env.txt
@@ -37,12 +43,25 @@ const path = require('path');
 const app = express();
 app.use(bodyParser.json());
 
-// --- Połączenie z PostgreSQL (przeniesione z baza_danych.js) ---
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.PG_CONNECTION || 'postgresql://user:pass@localhost:5432/ostrans'
-});
+// --- Połączenie z PostgreSQL (opcjonalne; preferuj PHP w panel/api.php) ---
+const connStr = process.env.DATABASE_URL || process.env.PG_CONNECTION;
+if (!connStr) {
+  throw new Error('Brak connection string (DATABASE_URL/PG_CONNECTION). API Node jest domyślnie wyłączone — użyj PHP.');
+}
+const pool = new Pool({ connectionString: connStr });
 const db = {
-  query: (text, params) => pool.query(text, params),
+  query: async (text, params) => {
+    try {
+      return await pool.query(text, params);
+    } catch (err) {
+      console.error('Database query error:', {
+        text,
+        params,
+        error: err && err.message ? err.message : err
+      });
+      throw err;
+    }
+  },
   pool
 };
 
