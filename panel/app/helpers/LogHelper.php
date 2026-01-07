@@ -15,7 +15,7 @@ class LogHelper {
     }
     
     /**
-     * Log an activity
+     * Log an activity with user-agent tracking (F26)
      * @param int $user_id User who performed the action
      * @param string $action What happened (login, edit_employee, add_schedule, etc)
      * @param string $entity Entity type (pracownik, pojazd, grafik, etc)
@@ -26,7 +26,7 @@ class LogHelper {
         if (!self::$db) return;
         
         try {
-            // Create activity_log table if not exists
+            // Create activity_log table if not exists - with user_agent column (F26)
             self::$db->exec("CREATE TABLE IF NOT EXISTS activity_log (
                 id SERIAL PRIMARY KEY,
                 user_id INT REFERENCES pracownicy(id),
@@ -35,17 +35,22 @@ class LogHelper {
                 entity_id INT,
                 data JSONB,
                 ip_address VARCHAR(50),
+                user_agent TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             )");
             
-            $stmt = self::$db->prepare('INSERT INTO activity_log (user_id, action, entity_type, entity_id, data, ip_address) VALUES (?, ?, ?, ?, ?, ?)');
+            // F26: Capture user-agent from request headers
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
+            
+            $stmt = self::$db->prepare('INSERT INTO activity_log (user_id, action, entity_type, entity_id, data, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([
                 $user_id,
                 $action,
                 $entity,
                 $entity_id,
                 json_encode($data),
-                $_SERVER['REMOTE_ADDR'] ?? null
+                $_SERVER['REMOTE_ADDR'] ?? null,
+                $userAgent
             ]);
         } catch (\Throwable $e) {
             error_log('LogHelper: ' . $e->getMessage());

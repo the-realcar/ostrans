@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Core\Database;
 use App\Helpers\AuthHelper;
 use App\Helpers\LogHelper;
+use App\Helpers\EmailHelper;
 
 class ApiController
 {
@@ -63,9 +64,9 @@ class ApiController
     }
     
     /**
-     * Request password reset - sends reset token (simplified version)
+     * Request password reset - sends reset token via email (F4)
      */
-    public function requestPasswordReset($login)
+    public function requestPasswordReset($login, $appUrl = 'http://localhost')
     {
         $stmt = $this->db->prepare('SELECT id, email FROM pracownicy WHERE login = :login AND is_active = true LIMIT 1');
         $stmt->execute(['login' => $login]);
@@ -84,6 +85,15 @@ class ApiController
         } catch (\Throwable $e) { /* ignore */ }
         
         LogHelper::log($user['id'], 'request_password_reset', 'pracownik', $user['id']);
+        
+        // F4: Send reset token via email
+        if ($user['email']) {
+            EmailHelper::init();
+            $sendResult = EmailHelper::sendPasswordReset($user['email'], $token, $appUrl);
+            if (!$sendResult[0]) {
+                LogHelper::log($user['id'], 'password_reset_email_failed', 'pracownik', $user['id'], ['error' => $sendResult[1]]);
+            }
+        }
         
         return [['token' => $token, 'email' => $user['email'] ?? null], null];
     }
@@ -162,6 +172,66 @@ class ApiController
         }
         $stmt = $this->db->query('SELECT * FROM wnioski ORDER BY data_zlozenia DESC LIMIT 500');
         return $stmt->fetchAll();
+    }
+
+    /**
+     * F22 - Approve employee request (only zarzad/dyspozytor)
+     */
+    public function approveWniosek($wniosek_id, $reqUser)
+    {
+        // Check authorization: only zarzad or dyspozytor can approve
+        if (!in_array($reqUser['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            return [null, 'unauthorized'];
+        }
+        
+        $stmt = $this->db->prepare('SELECT id, pracownik_id FROM wnioski WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $wniosek_id]);
+        $wniosek = $stmt->fetch();
+        if (!$wniosek) {
+            return [null, 'not_found'];
+        }
+        
+        $stmt = $this->db->prepare('UPDATE wnioski SET status = :status, data_rozpatrzenia = NOW() WHERE id = :id RETURNING *');
+        $stmt->execute([
+            'status' => 'zaakceptowany',
+            'id' => $wniosek_id
+        ]);
+        
+        $result = $stmt->fetch();
+        if ($result) {
+            LogHelper::log($reqUser['id'], 'wniosek_approved', 'wnioski', $wniosek_id, ['pracownik_id' => $wniosek['pracownik_id']]);
+        }
+        return [$result, null];
+    }
+
+    /**
+     * F22 - Reject employee request (only zarzad/dyspozytor)
+     */
+    public function rejectWniosek($wniosek_id, $reqUser, $reason = null)
+    {
+        // Check authorization: only zarzad or dyspozytor can reject
+        if (!in_array($reqUser['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            return [null, 'unauthorized'];
+        }
+        
+        $stmt = $this->db->prepare('SELECT id, pracownik_id FROM wnioski WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $wniosek_id]);
+        $wniosek = $stmt->fetch();
+        if (!$wniosek) {
+            return [null, 'not_found'];
+        }
+        
+        $stmt = $this->db->prepare('UPDATE wnioski SET status = :status, data_rozpatrzenia = NOW() WHERE id = :id RETURNING *');
+        $stmt->execute([
+            'status' => 'odrzucony',
+            'id' => $wniosek_id
+        ]);
+        
+        $result = $stmt->fetch();
+        if ($result) {
+            LogHelper::log($reqUser['id'], 'wniosek_rejected', 'wnioski', $wniosek_id, ['pracownik_id' => $wniosek['pracownik_id'], 'reason' => $reason]);
+        }
+        return [$result, null];
     }
 
     public function addWniosek($reqUser, $payload)
@@ -272,36 +342,83 @@ class ApiController
         return $q->fetchAll();
     }
 
-    public function adminPojazd($data)
+    public function adminPojazd($data, $method = 'POST', $vehicleId = null, $reqUser = null)
     {
-        $id = $data['id'] ?? null;
+        $id = $vehicleId ?? $data['id'] ?? null;
         $fields = ['nr_rejestracyjny','marka','model','rok_produkcji','sprawny'];
+        
+        // F11: DELETE vehicle (soft delete via is_active flag)
+        if ($method === 'DELETE' && $id) {
+            $stmt = $this->db->prepare('UPDATE pojazdy SET is_active = false WHERE id = :id RETURNING *');
+            $stmt->execute(['id' => $id]);
+            $result = $stmt->fetch();
+            if ($result && $reqUser) {
+                LogHelper::log($reqUser['id'] ?? null, 'pojazd_deleted', 'pojazdy', $id);
+            }
+            return $result;
+        }
+        
+        // F11: UPDATE vehicle status
+        if ($method === 'PUT' && $id) {
+            $updates = [];
+            $params = ['id' => $id];
+            if (isset($data['sprawny'])) {
+                $updates[] = 'sprawny = :spr';
+                $params['spr'] = (bool)$data['sprawny'];
+            }
+            if (isset($data['nr_rejestracyjny'])) {
+                $updates[] = 'nr_rejestracyjny = :nr';
+                $params['nr'] = $data['nr_rejestracyjny'];
+            }
+            if (isset($data['marka'])) {
+                $updates[] = 'marka = :marka';
+                $params['marka'] = $data['marka'];
+            }
+            if (isset($data['model'])) {
+                $updates[] = 'model = :model';
+                $params['model'] = $data['model'];
+            }
+            if (isset($data['rok_produkcji'])) {
+                $updates[] = 'rok_produkcji = :rok';
+                $params['rok'] = $data['rok_produkcji'];
+            }
+            
+            if (empty($updates)) {
+                return [null, 'no_updates'];
+            }
+            
+            $sql = 'UPDATE pojazdy SET ' . implode(', ', $updates) . ' WHERE id = :id RETURNING *';
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $result = $stmt->fetch();
+            if ($result && $reqUser) {
+                LogHelper::log($reqUser['id'] ?? null, 'pojazd_updated', 'pojazdy', $id, ['changes' => $data]);
+            }
+            return $result;
+        }
+        
+        // POST: INSERT new vehicle
         foreach ($fields as $f) {
             if (!isset($data[$f]) && $f !== 'rok_produkcji' && $f !== 'model') {
                 // minimal check
             }
         }
-        if ($id) {
-            $stmt = $this->db->prepare('UPDATE pojazdy SET nr_rejestracyjny=:nr, marka=:marka, model=:model, rok_produkcji=:rok, sprawny=:spr WHERE id=:id RETURNING *');
-            $stmt->execute([
-                'nr'=>$data['nr_rejestracyjny'] ?? null,
-                'marka'=>$data['marka'] ?? null,
-                'model'=>$data['model'] ?? null,
-                'rok'=>$data['rok_produkcji'] ?? null,
-                'spr'=>isset($data['sprawny']) ? (bool)$data['sprawny'] : true,
-                'id'=>$id
-            ]);
-            return $stmt->fetch();
-        }
-        $stmt = $this->db->prepare('INSERT INTO pojazdy (nr_rejestracyjny, marka, model, rok_produkcji, sprawny) VALUES (:nr,:marka,:model,:rok,:spr) RETURNING *');
-        $stmt->execute([
+        
+        $stmt = $this->db->prepare('INSERT INTO pojazdy (nr_rejestracyjny, marka, model, rok_produkcji, sprawny, is_active) VALUES (:nr,:marka,:model,:rok,:spr,:active) RETURNING *');
+        $result = $stmt->execute([
             'nr'=>$data['nr_rejestracyjny'] ?? null,
             'marka'=>$data['marka'] ?? null,
             'model'=>$data['model'] ?? null,
             'rok'=>$data['rok_produkcji'] ?? null,
-            'spr'=>isset($data['sprawny']) ? (bool)$data['sprawny'] : true
+            'spr'=>isset($data['sprawny']) ? (bool)$data['sprawny'] : true,
+            'active' => true
         ]);
-        return $stmt->fetch();
+        
+        $vehicle = $stmt->fetch();
+        if ($vehicle && $reqUser) {
+            LogHelper::log($reqUser['id'] ?? null, 'pojazd_created', 'pojazdy', $vehicle['id'], ['vehicle' => $vehicle]);
+        }
+        return $vehicle;
     }
 
     public function adminPracownik($data)
@@ -383,16 +500,60 @@ class ApiController
         return $stmt->fetch();
     }
 
+    /**
+     * F20 - Validate conflict: driver cannot be assigned to 2 brigades on same day
+     */
+    private function validateScheduleConflict($pracownik_id, $data, $brygada_id, $exclude_id = null)
+    {
+        // Check if driver already has schedule for this date with different brigade
+        $sql = 'SELECT id FROM grafiki WHERE pracownik_id = :pid AND data = :data AND brygada_id != :bry AND is_active = true';
+        if ($exclude_id) {
+            $sql .= ' AND id != :eid';
+        }
+        
+        $stmt = $this->db->prepare($sql);
+        $params = [
+            'pid' => $pracownik_id,
+            'data' => $data,
+            'bry' => $brygada_id
+        ];
+        if ($exclude_id) {
+            $params['eid'] = $exclude_id;
+        }
+        $stmt->execute($params);
+        
+        if ($stmt->rowCount() > 0) {
+            return [null, 'conflict_schedule']; // Driver already assigned to different brigade this day
+        }
+        return [true, null];
+    }
+
     public function adminGrafik($data)
     {
+        $pracownik_id = $data['pracownik_id'] ?? null;
+        $data_grafik = $data['data'] ?? null;
+        $brygada_id = $data['brygada_id'] ?? null;
+        $pojazd_id = $data['pojazd_id'] ?? null;
+        
+        // F20: Validate conflict
+        [$valid, $err] = $this->validateScheduleConflict($pracownik_id, $data_grafik, $brygada_id);
+        if (!$valid) {
+            return [null, $err];
+        }
+        
         $stmt = $this->db->prepare('INSERT INTO grafiki (pracownik_id, data, brygada_id, pojazd_id) VALUES (:pid,:data,:bry,:poj) RETURNING *');
         $stmt->execute([
-            'pid'=>$data['pracownik_id'] ?? null,
-            'data'=>$data['data'] ?? null,
-            'bry'=>$data['brygada_id'] ?? null,
-            'poj'=>$data['pojazd_id'] ?? null,
+            'pid'=>$pracownik_id,
+            'data'=>$data_grafik,
+            'bry'=>$brygada_id,
+            'poj'=>$pojazd_id,
         ]);
-        return $stmt->fetch();
+        
+        $result = $stmt->fetch();
+        if ($result) {
+            LogHelper::log($pracownik_id, 'grafik_created', 'grafiki', $result['id']);
+        }
+        return $result;
     }
 
     // --- JWT helpers (HS256 manual) ---

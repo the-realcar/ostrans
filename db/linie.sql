@@ -1,3 +1,4 @@
-INSERT INTO linie (nazwa, opis) 
-VALUES ('107','Salwator - Boernerowo'),
-('116', 'Osiedle Zgody - Blachownia');
+INSERT INTO linie (nr_linii, typ, start_point, end_point) 
+VALUES 
+('107', 'bus', 'Salwator', 'Boernerowo'),
+('116', 'bus', 'Osiedle Zgody', 'Blachownia');
