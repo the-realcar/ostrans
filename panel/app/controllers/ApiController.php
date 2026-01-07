@@ -320,11 +320,11 @@ class ApiController
     public function grafik($userId = null)
     {
         if ($userId) {
-            $stmt = $this->db->prepare('SELECT * FROM grafiki WHERE pracownik_id=:id ORDER BY data');
+            $stmt = $this->db->prepare('SELECT g.*, b.nazwa AS brygada_nazwa, b.typ_brygady FROM grafiki g LEFT JOIN brygady b ON g.brygada_id=b.id WHERE g.pracownik_id=:id ORDER BY g.data');
             $stmt->execute(['id' => (int)$userId]);
             return $stmt->fetchAll();
         }
-        $q = $this->db->query('SELECT * FROM grafiki ORDER BY data LIMIT 500');
+        $q = $this->db->query('SELECT g.*, b.nazwa AS brygada_nazwa, b.typ_brygady FROM grafiki g LEFT JOIN brygady b ON g.brygada_id=b.id ORDER BY g.data LIMIT 500');
         return $q->fetchAll();
     }
     public function pracownicy()
@@ -535,6 +535,11 @@ class ApiController
         $brygada_id = $data['brygada_id'] ?? null;
         $pojazd_id = $data['pojazd_id'] ?? null;
         
+        // If no vehicle provided, try permanent assignment (F13)
+        if (!$pojazd_id && $pracownik_id) {
+            $pojazd_id = $this->getPermanentVehicle($pracownik_id);
+        }
+        
         // F20: Validate conflict
         [$valid, $err] = $this->validateScheduleConflict($pracownik_id, $data_grafik, $brygada_id);
         if (!$valid) {
@@ -552,8 +557,209 @@ class ApiController
         $result = $stmt->fetch();
         if ($result) {
             LogHelper::log($pracownik_id, 'grafik_created', 'grafiki', $result['id']);
+            // F12: log vehicle usage if vehicle assigned
+            if ($pojazd_id) {
+                $this->logVehicleUsage($pojazd_id, $pracownik_id, $result['id'], $data_grafik, null);
+            }
         }
         return $result;
+    }
+
+    /**
+     * F12 - log vehicle usage
+     */
+    private function logVehicleUsage($pojazd_id, $pracownik_id, $grafik_id, $data_start, $data_end = null)
+    {
+        try {
+            $this->db->exec('CREATE TABLE IF NOT EXISTS vehicle_usage (
+                id SERIAL PRIMARY KEY,
+                pojazd_id INT NOT NULL REFERENCES pojazdy(id),
+                pracownik_id INT REFERENCES pracownicy(id),
+                grafik_id INT REFERENCES grafiki(id),
+                data_start TIMESTAMP NOT NULL,
+                data_end TIMESTAMP,
+                km_start INT,
+                km_end INT,
+                uwagi TEXT,
+                is_active BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )');
+            $stmt = $this->db->prepare('INSERT INTO vehicle_usage (pojazd_id, pracownik_id, grafik_id, data_start, data_end) VALUES (:p,:pr,:g,:ds,:de)');
+            $stmt->execute([
+                'p' => $pojazd_id,
+                'pr' => $pracownik_id,
+                'g' => $grafik_id,
+                'ds' => $data_start,
+                'de' => $data_end,
+            ]);
+        } catch (\Throwable $e) {
+            // swallow to avoid breaking grafik creation
+        }
+    }
+
+    /**
+     * F13 - get permanent vehicle for driver
+     */
+    private function getPermanentVehicle($pracownik_id)
+    {
+        try {
+            $stmt = $this->db->prepare('SELECT pojazd_id FROM pracownik_pojazd_staly WHERE pracownik_id = :pid AND is_active = true ORDER BY data_przypisania DESC LIMIT 1');
+            $stmt->execute(['pid' => $pracownik_id]);
+            $row = $stmt->fetch();
+            return $row['pojazd_id'] ?? null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * F13 - assign or update permanent vehicle for driver
+     */
+    public function assignPermanentVehicle($reqUser, $pracownik_id, $pojazd_id)
+    {
+        if (!in_array($reqUser['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            return [null, 'unauthorized'];
+        }
+        try {
+            $this->db->exec('CREATE TABLE IF NOT EXISTS pracownik_pojazd_staly (
+                id SERIAL PRIMARY KEY,
+                pracownik_id INT NOT NULL REFERENCES pracownicy(id) UNIQUE,
+                pojazd_id INT NOT NULL REFERENCES pojazdy(id),
+                data_przypisania DATE DEFAULT CURRENT_DATE,
+                data_zakonczenia DATE,
+                uwagi TEXT,
+                is_active BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )');
+            // Upsert style: if exists, update; else insert
+            $stmt = $this->db->prepare('SELECT id FROM pracownik_pojazd_staly WHERE pracownik_id = :pid LIMIT 1');
+            $stmt->execute(['pid' => $pracownik_id]);
+            $exists = $stmt->fetch();
+            if ($exists) {
+                $upd = $this->db->prepare('UPDATE pracownik_pojazd_staly SET pojazd_id = :poj, is_active = true, data_zakonczenia = NULL, updated_at = NOW() WHERE pracownik_id = :pid RETURNING *');
+                $upd->execute(['poj'=>$pojazd_id, 'pid'=>$pracownik_id]);
+                $row = $upd->fetch();
+            } else {
+                $ins = $this->db->prepare('INSERT INTO pracownik_pojazd_staly (pracownik_id, pojazd_id, is_active) VALUES (:pid,:poj,true) RETURNING *');
+                $ins->execute(['pid'=>$pracownik_id, 'poj'=>$pojazd_id]);
+                $row = $ins->fetch();
+            }
+            LogHelper::log($reqUser['id'] ?? null, 'pojazd_staly_set', 'pracownik_pojazd_staly', $pracownik_id, ['pojazd_id' => $pojazd_id]);
+            return [$row, null];
+        } catch (\Throwable $e) {
+            return [null, 'assign_failed'];
+        }
+    }
+
+    // --- Export methods (F27-F29) ---
+    public function exportGrafiki(array $params)
+    {
+        $format = $params['format'] ?? 'csv';
+        $startDate = $params['start_date'] ?? null;
+        $endDate = $params['end_date'] ?? null;
+
+        try {
+            $query = "SELECT g.id, g.pracownik_id, g.brygada_id, g.pojazd_id, g.data, g.status,
+                             CONCAT(p.imie, ' ', p.nazwisko) as pracownik,
+                             b.nazwa as brygada_nazwa, b.typ_brygady,
+                             poj.nr_rejestracyjny
+                      FROM grafiki g
+                      LEFT JOIN pracownicy p ON g.pracownik_id = p.id
+                      LEFT JOIN brygady b ON g.brygada_id = b.id
+                      LEFT JOIN pojazdy poj ON g.pojazd_id = poj.id
+                      WHERE 1=1";
+            
+            $queryParams = [];
+            $paramIndex = 1;
+            
+            if ($startDate) {
+                $query .= " AND g.data >= $" . $paramIndex++;
+                $queryParams[] = $startDate;
+            }
+            if ($endDate) {
+                $query .= " AND g.data <= $" . $paramIndex++;
+                $queryParams[] = $endDate;
+            }
+            
+            $query .= " ORDER BY g.data DESC, g.id DESC";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($queryParams);
+            $data = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if ($format === 'pdf') {
+                require_once __DIR__ . '/../helpers/ExportHelper.php';
+                $html = \App\Helpers\ExportHelper::formatGrafikiHTML($data);
+                $pdf = \App\Helpers\ExportHelper::generatePDF($html, 'Grafiki PPUT Ostrans');
+                return ['content' => $pdf, 'filename' => 'grafiki_' . date('Y-m-d') . '.pdf', 'mime' => 'application/pdf'];
+            } else {
+                require_once __DIR__ . '/../helpers/ExportHelper.php';
+                $csv = \App\Helpers\ExportHelper::generateCSV($data);
+                return ['content' => $csv, 'filename' => 'grafiki_' . date('Y-m-d') . '.csv', 'mime' => 'text/csv'];
+            }
+        } catch (\Throwable $e) {
+            return ['error' => 'export_failed', 'message' => $e->getMessage()];
+        }
+    }
+
+    public function exportPojazdy(array $params)
+    {
+        $format = $params['format'] ?? 'csv';
+
+        try {
+            $query = "SELECT id, nr_rejestracyjny, marka, model, rok_produkcji, sprawny, is_active
+                      FROM pojazdy
+                      WHERE is_active = true
+                      ORDER BY nr_rejestracyjny";
+            
+            $stmt = $this->db->query($query);
+            $data = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if ($format === 'pdf') {
+                require_once __DIR__ . '/../helpers/ExportHelper.php';
+                $html = \App\Helpers\ExportHelper::formatPojazdyHTML($data);
+                $pdf = \App\Helpers\ExportHelper::generatePDF($html, 'Pojazdy PPUT Ostrans');
+                return ['content' => $pdf, 'filename' => 'pojazdy_' . date('Y-m-d') . '.pdf', 'mime' => 'application/pdf'];
+            } else {
+                require_once __DIR__ . '/../helpers/ExportHelper.php';
+                $csv = \App\Helpers\ExportHelper::generateCSV($data);
+                return ['content' => $csv, 'filename' => 'pojazdy_' . date('Y-m-d') . '.csv', 'mime' => 'text/csv'];
+            }
+        } catch (\Throwable $e) {
+            return ['error' => 'export_failed', 'message' => $e->getMessage()];
+        }
+    }
+
+    public function exportBrygady(array $params)
+    {
+        $format = $params['format'] ?? 'csv';
+
+        try {
+            $query = "SELECT b.id, b.nazwa, b.linia_id, b.typ_brygady, b.is_active,
+                             l.nr_linii, l.typ as linia_typ
+                      FROM brygady b
+                      LEFT JOIN linie l ON b.linia_id = l.id
+                      WHERE b.is_active = true
+                      ORDER BY b.nazwa";
+            
+            $stmt = $this->db->query($query);
+            $data = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            if ($format === 'pdf') {
+                require_once __DIR__ . '/../helpers/ExportHelper.php';
+                $html = \App\Helpers\ExportHelper::formatBrygadyHTML($data);
+                $pdf = \App\Helpers\ExportHelper::generatePDF($html, 'Brygady PPUT Ostrans');
+                return ['content' => $pdf, 'filename' => 'brygady_' . date('Y-m-d') . '.pdf', 'mime' => 'application/pdf'];
+            } else {
+                require_once __DIR__ . '/../helpers/ExportHelper.php';
+                $csv = \App\Helpers\ExportHelper::generateCSV($data);
+                return ['content' => $csv, 'filename' => 'brygady_' . date('Y-m-d') . '.csv', 'mime' => 'text/csv'];
+            }
+        } catch (\Throwable $e) {
+            return ['error' => 'export_failed', 'message' => $e->getMessage()];
+        }
     }
 
     // --- JWT helpers (HS256 manual) ---

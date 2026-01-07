@@ -167,6 +167,62 @@ switch (true) {
         $body = json_decode(file_get_contents('php://input'), true) ?: [];
         json_response($api->adminGrafik($body));
         break;
+    case $uri === '/api/admin/pojazd' && $method === 'POST':
+        $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        $res = $api->adminPojazd($body, 'POST', null, $u);
+        if (is_array($res) && isset($res[1]) && $res[1]) json_response(['error'=>$res[1]],400);
+        json_response(['ok'=>true, 'pojazd'=>$res]);
+        break;
+    case preg_match('#^/api/admin/pojazd/(\d+)$#', $uri, $m) && $method === 'PUT':
+        $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        $res = $api->adminPojazd($body, 'PUT', (int)$m[1], $u);
+        if (is_array($res) && isset($res[1]) && $res[1]) json_response(['error'=>$res[1]],400);
+        json_response(['ok'=>true, 'pojazd'=>$res]);
+        break;
+    case preg_match('#^/api/admin/pojazd/(\d+)$#', $uri, $m) && $method === 'DELETE':
+        $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);
+        $res = $api->adminPojazd([], 'DELETE', (int)$m[1], $u);
+        if (is_array($res) && isset($res[1]) && $res[1]) json_response(['error'=>$res[1]],400);
+        json_response(['ok'=>true, 'pojazd'=>$res]);
+        break;
+    case preg_match('#^/api/admin/pracownik/(\d+)/pojazd-staly$#', $uri, $m) && $method === 'POST':
+        $u = get_bearer_user($jwtSecret); if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res,$err] = $api->assignPermanentVehicle($u, (int)$m[1], $body['pojazd_id'] ?? null);
+        if ($err) json_response(['error'=>$err],400);
+        json_response(['ok'=>true, 'pojazd_staly'=>$res]);
+        break;
+    case preg_match('#^/api/export/(grafiki|pojazdy|brygady)$#', $uri, $m) && $method === 'GET':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        
+        $entity = $m[1];
+        $params = $_GET;
+        
+        switch ($entity) {
+            case 'grafiki':
+                $result = $api->exportGrafiki($params);
+                break;
+            case 'pojazdy':
+                $result = $api->exportPojazdy($params);
+                break;
+            case 'brygady':
+                $result = $api->exportBrygady($params);
+                break;
+        }
+        
+        if (isset($result['error'])) {
+            json_response($result, 500);
+        }
+        
+        header('Content-Type: ' . $result['mime']);
+        header('Content-Disposition: attachment; filename="' . $result['filename'] . '"');
+        echo $result['content'];
+        exit;
+        break;
     default:
         json_response(['error' => 'not found'], 404);
 }

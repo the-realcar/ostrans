@@ -17,6 +17,7 @@
     <nav>
       <span style="color:#dbeafe;margin-right:12px"><?=htmlspecialchars($user['imie'] ?? '')?> (<?=htmlspecialchars($user['uprawnienie'] ?? '')?>)</span>
       <a href="/panel/index.php?route=dashboard">Dashboard</a>
+      <a href="/panel/index.php?route=pojazdy">Pojazdy</a>
       <a href="/">Strona główna</a>
       <a href="/panel/index.php?route=logout">Wyloguj</a>
     </nav>

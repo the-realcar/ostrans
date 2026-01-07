@@ -32,6 +32,7 @@ if ($route === 'zgloszenia') { $panel->zgloszenia(); exit; }
 if ($route === 'wyslij-raport') { $panel->wyslijRaport(); exit; }
 if ($route === 'admin') { $panel->admin(); exit; }
 if ($route === 'employees') { $panel->employees(); exit; }
+if ($route === 'pojazdy') { $panel->pojazdy(); exit; }
 
 // Serve embedded HTML (previously index.html) for home route and inject session user as JS
 if ($route === 'home') {

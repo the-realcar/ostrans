@@ -61,4 +61,10 @@ class PanelController {
         $this->requireZarzad($user);
         require __DIR__ . '/../views/employees.php';
     }
+
+    public function pojazdy() {
+        $user = $this->requireAuth();
+        $this->requireZarzad($user);
+        require __DIR__ . '/../views/pojazdy.php';
+    }
 }
