@@ -2,6 +2,8 @@
 namespace App\Controllers;
 
 use App\Core\Database;
+use App\Helpers\AuthHelper;
+use App\Helpers\LogHelper;
 
 class ApiController
 {
@@ -10,11 +12,12 @@ class ApiController
     public function __construct(Database $db)
     {
         $this->db = $db->pdo;
+        LogHelper::init($db);
     }
 
     public function login($login, $password, $jwtSecret)
     {
-        $stmt = $this->db->prepare('SELECT p.*, u.poziom AS uprawnienie FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id WHERE p.login = :login LIMIT 1');
+        $stmt = $this->db->prepare('SELECT p.*, u.poziom AS uprawnienie FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id WHERE p.login = :login AND p.is_active = true LIMIT 1');
         $stmt->execute(['login' => $login]);
         $user = $stmt->fetch();
         if (!$user) {
@@ -28,6 +31,10 @@ class ApiController
             $ok = ($password === $stored);
         }
         if (!$ok) return [null, 'invalid'];
+        
+        // Log login activity
+        LogHelper::log($user['id'], 'login', 'pracownik', $user['id'], ['ip' => $_SERVER['REMOTE_ADDR'] ?? null]);
+        
         unset($user['haslo']);
         $token = $this->signJwt([
             'id' => $user['id'],
@@ -50,9 +57,95 @@ class ApiController
 
     public function me($userId)
     {
-        $stmt = $this->db->prepare('SELECT p.id, p.imie, p.nazwisko, p.login, u.poziom as uprawnienie FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id WHERE p.id=:id');
+        $stmt = $this->db->prepare('SELECT p.id, p.imie, p.nazwisko, p.login, u.poziom as uprawnienie FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id WHERE p.id=:id AND p.is_active = true');
         $stmt->execute(['id' => $userId]);
         return $stmt->fetch();
+    }
+    
+    /**
+     * Request password reset - sends reset token (simplified version)
+     */
+    public function requestPasswordReset($login)
+    {
+        $stmt = $this->db->prepare('SELECT id, email FROM pracownicy WHERE login = :login AND is_active = true LIMIT 1');
+        $stmt->execute(['login' => $login]);
+        $user = $stmt->fetch();
+        if (!$user) return [null, 'not_found'];
+        
+        // Generate reset token
+        $token = bin2hex(random_bytes(32));
+        $expiresAt = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+        
+        // Save reset token
+        try {
+            $this->db->exec('CREATE TABLE IF NOT EXISTS password_resets (id SERIAL PRIMARY KEY, user_id INT REFERENCES pracownicy(id), token VARCHAR(64), expires_at TIMESTAMP)');
+            $stmt = $this->db->prepare('INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)');
+            $stmt->execute([$user['id'], $token, $expiresAt]);
+        } catch (\Throwable $e) { /* ignore */ }
+        
+        LogHelper::log($user['id'], 'request_password_reset', 'pracownik', $user['id']);
+        
+        return [['token' => $token, 'email' => $user['email'] ?? null], null];
+    }
+    
+    /**
+     * Reset password with token
+     */
+    public function resetPassword($token, $newPassword)
+    {
+        if (!$token || !$newPassword) return [null, 'missing fields'];
+        
+        $stmt = $this->db->prepare('SELECT user_id FROM password_resets WHERE token = ? AND expires_at > NOW() LIMIT 1');
+        $stmt->execute([$token]);
+        $reset = $stmt->fetch();
+        
+        if (!$reset) return [null, 'invalid_or_expired_token'];
+        
+        // Update password
+        $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+        $stmt = $this->db->prepare('UPDATE pracownicy SET haslo = ? WHERE id = ?');
+        $stmt->execute([$hashedPassword, $reset['user_id']]);
+        
+        // Delete used token
+        $stmt = $this->db->prepare('DELETE FROM password_resets WHERE token = ?');
+        $stmt->execute([$token]);
+        
+        LogHelper::log($reset['user_id'], 'reset_password', 'pracownik', $reset['user_id']);
+        
+        return [[true], null];
+    }
+    
+    /**
+     * Change password (authenticated user)
+     */
+    public function changePassword($userId, $oldPassword, $newPassword)
+    {
+        if (!$oldPassword || !$newPassword) return [null, 'missing fields'];
+        if (strlen($newPassword) < 6) return [null, 'password_too_short'];
+        
+        $stmt = $this->db->prepare('SELECT haslo FROM pracownicy WHERE id = ?');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+        
+        if (!$user) return [null, 'user_not_found'];
+        
+        // Verify old password
+        $ok = false;
+        if (strpos($user['haslo'], '$2') === 0) {
+            $ok = password_verify($oldPassword, $user['haslo']);
+        } else {
+            $ok = ($oldPassword === $user['haslo']);
+        }
+        if (!$ok) return [null, 'invalid_old_password'];
+        
+        // Update password
+        $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+        $stmt = $this->db->prepare('UPDATE pracownicy SET haslo = ? WHERE id = ?');
+        $stmt->execute([$hashedPassword, $userId]);
+        
+        LogHelper::log($userId, 'change_password', 'pracownik', $userId);
+        
+        return [[true], null];
     }
 
     public function getWnioski($reqUser, $userId = null)
@@ -166,7 +259,16 @@ class ApiController
     }
     public function pracownicy()
     {
-        $q = $this->db->query('SELECT p.id,p.imie,p.nazwisko,p.login,u.poziom as uprawnienie FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id ORDER BY p.id');
+        $q = $this->db->query('SELECT p.id,p.imie,p.nazwisko,p.login,u.poziom as uprawnienie,p.is_active FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id WHERE p.is_active = true ORDER BY p.id');
+        return $q->fetchAll();
+    }
+    
+    /**
+     * Get all employees (for zarzad admin panel) - includes inactive
+     */
+    public function pracownicyAll()
+    {
+        $q = $this->db->query('SELECT p.id,p.imie,p.nazwisko,p.login,u.poziom as uprawnienie,p.is_active FROM pracownicy p JOIN uprawnienia u ON p.uprawnienie_id=u.id ORDER BY p.id');
         return $q->fetchAll();
     }
 
@@ -204,17 +306,74 @@ class ApiController
 
     public function adminPracownik($data)
     {
-        $stmt = $this->db->prepare('INSERT INTO pracownicy (imie,nazwisko,login,haslo,stanowisko_id,uprawnienie_id,discord_id) VALUES (:im,:na,:lo,:ha,:stan,:upr,:discord) RETURNING id');
-        $stmt->execute([
-            'im'=>$data['imie'] ?? null,
-            'na'=>$data['nazwisko'] ?? null,
-            'lo'=>$data['login'] ?? null,
-            'ha'=>$data['haslo'] ?? null,
-            'stan'=>$data['stanowisko_id'] ?? null,
-            'upr'=>$data['uprawnienie_id'] ?? null,
-            'discord'=>$data['discord_id'] ?? null,
-        ]);
-        return $stmt->fetch();
+        $id = $data['id'] ?? null;
+        
+        if ($id) {
+            // Update existing
+            $updates = [];
+            $params = ['id' => $id];
+            
+            if (!empty($data['imie'])) { $updates[] = 'imie = :imie'; $params['imie'] = $data['imie']; }
+            if (!empty($data['nazwisko'])) { $updates[] = 'nazwisko = :nazwisko'; $params['nazwisko'] = $data['nazwisko']; }
+            if (!empty($data['haslo'])) { 
+                $updates[] = 'haslo = :haslo';
+                $params['haslo'] = password_hash($data['haslo'], PASSWORD_BCRYPT);
+            }
+            if (isset($data['uprawnienie_id'])) { $updates[] = 'uprawnienie_id = :upr'; $params['upr'] = $data['uprawnienie_id']; }
+            if (isset($data['is_active'])) { $updates[] = 'is_active = :active'; $params['active'] = $data['is_active']; }
+            
+            if (empty($updates)) return [null, 'no_updates'];
+            
+            $stmt = $this->db->prepare('UPDATE pracownicy SET ' . implode(', ', $updates) . ' WHERE id = :id RETURNING *');
+            $stmt->execute($params);
+            $result = $stmt->fetch();
+            
+            LogHelper::log($id, 'edit_employee', 'pracownik', $id, $data);
+            return [$result, null];
+        } else {
+            // Create new
+            if (empty($data['imie']) || empty($data['nazwisko']) || empty($data['login']) || empty($data['haslo']) || empty($data['uprawnienie_id'])) {
+                return [null, 'missing required fields'];
+            }
+            
+            $hashedPassword = password_hash($data['haslo'], PASSWORD_BCRYPT);
+            $stmt = $this->db->prepare('INSERT INTO pracownicy (imie,nazwisko,login,haslo,stanowisko_id,uprawnienie_id,discord_id,is_active) VALUES (:im,:na,:lo,:ha,:stan,:upr,:discord,:active) RETURNING *');
+            $stmt->execute([
+                'im'=>$data['imie'],
+                'na'=>$data['nazwisko'],
+                'lo'=>$data['login'],
+                'ha'=>$hashedPassword,
+                'stan'=>$data['stanowisko_id'] ?? null,
+                'upr'=>$data['uprawnienie_id'],
+                'discord'=>$data['discord_id'] ?? null,
+                'active'=>true
+            ]);
+            $result = $stmt->fetch();
+            
+            LogHelper::log($result['id'], 'create_employee', 'pracownik', $result['id'], $data);
+            return [$result, null];
+        }
+    }
+    
+    /**
+     * Deactivate employee (soft delete)
+     */
+    public function deactivateEmployee($employeeId)
+    {
+        $stmt = $this->db->prepare('UPDATE pracownicy SET is_active = false WHERE id = ?');
+        $stmt->execute([$employeeId]);
+        
+        LogHelper::log($employeeId, 'deactivate_employee', 'pracownik', $employeeId);
+        
+        return [[true], null];
+    }
+    
+    /**
+     * Get activity log
+     */
+    public function getActivityLog($filters = [])
+    {
+        return LogHelper::getLog($filters);
     }
 
     public function adminRejestracja($data)

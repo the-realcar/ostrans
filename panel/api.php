@@ -112,15 +112,50 @@ switch (true) {
         $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);
         json_response($api->pracownicy());
         break;
-    case $uri === '/api/admin/pojazd' && $method === 'POST':
+    case $uri === '/api/admin/pracownicy':
         $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);
-        $body = json_decode(file_get_contents('php://input'), true) ?: [];
-        json_response($api->adminPojazd($body));
+        json_response($api->pracownicyAll());
         break;
     case $uri === '/api/admin/pracownik' && $method === 'POST':
         $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);
         $body = json_decode(file_get_contents('php://input'), true) ?: [];
-        json_response($api->adminPracownik($body));
+        [$res, $err] = $api->adminPracownik($body);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'pracownik'=>$res]);
+        break;
+    case preg_match('#^/api/admin/employee/(\d+)/deactivate$#', $uri, $m) && $method === 'POST':
+        $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);
+        [$res, $err] = $api->deactivateEmployee((int)$m[1]);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true]);
+        break;
+    case $uri === '/api/activity-log':
+        $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);
+        $filters = [
+            'user_id' => $_GET['user_id'] ?? null,
+            'entity_type' => $_GET['entity_type'] ?? null,
+            'entity_id' => $_GET['entity_id'] ?? null,
+        ];
+        json_response($api->getActivityLog($filters));
+        break;
+    case $uri === '/api/password-reset/request' && $method === 'POST':
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->requestPasswordReset($body['login'] ?? '');
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'message'=>'Reset link sent']);
+        break;
+    case $uri === '/api/password-reset/confirm' && $method === 'POST':
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->resetPassword($body['token'] ?? '', $body['newPassword'] ?? '');
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true]);
+        break;
+    case $uri === '/api/password/change' && $method === 'POST':
+        $u = get_bearer_user($jwtSecret); if (!$u) json_response(['error'=>'no auth'],401);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->changePassword($u['id'], $body['oldPassword'] ?? '', $body['newPassword'] ?? '');
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true]);
         break;
     case $uri === '/api/admin/rejestracja' && $method === 'POST':
         $u = get_bearer_user($jwtSecret); if (!$u || ($u['uprawnienie'] ?? '')!=='zarzad') json_response(['error'=>'forbidden'],403);

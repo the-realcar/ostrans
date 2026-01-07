@@ -53,6 +53,12 @@ class PanelController {
     public function admin() {
         $user = $this->requireAuth();
         $this->requireZarzad($user);
-        require __DIR__ . '/../views/admin.php';
+        require __DIR__ . '/../views/employees.php';
+    }
+    
+    public function employees() {
+        $user = $this->requireAuth();
+        $this->requireZarzad($user);
+        require __DIR__ . '/../views/employees.php';
     }
 }
