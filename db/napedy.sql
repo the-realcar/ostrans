@@ -1,0 +1,18 @@
+INSERT INTO napedy (nazwa_napedu)
+VALUES ('euro 0'),
+('euro 1'),
+('euro 2'),
+('euro 3'),
+('euro 4'),
+('euro 5'),
+('EEV'),
+('euro 6'),
+('euro 4 CNG'),
+('EEV CNG'),
+('euro 6 CNG'),
+('EEV Hybrid'),
+('euro 6 Hybrid'),
+('euro 6 Mild Hybrid'),
+('elektryczny'),
+('elektryczny plug-in'),
+('wodorowy');

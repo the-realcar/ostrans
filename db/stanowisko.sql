@@ -1,0 +1,22 @@
+INSERT INTO stanowiska (nazwa)
+VALUES 
+('Nowy Kierowca'),
+('Kierowca'),
+('Doświadczony Kierowca'),
+('Blacharz'),
+('Elektryk'),
+('Lakiernik'),
+('Mechanik'),
+('Magazynier'),
+('Pracownik warsztatu'),
+('Nowy Inspektor biletów'),
+('Inspektor biletów'),
+('Doświadczony Inspektor biletów'),
+('Nowy Dyspozytor'),
+('Dyspozytor'),
+('Dyspozytor Główny'),
+('Zastępca Kierownika Zajezdni'),
+('Kierownik Zajezdni'),
+('Zarząd'),
+('Zastępca prezesa'),
+('Prezes');
