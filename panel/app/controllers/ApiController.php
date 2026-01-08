@@ -762,6 +762,330 @@ class ApiController
         }
     }
 
+    // ============================================================================
+    // F14-F16: Lines and Brigades Management
+    // ============================================================================
+    
+    /**
+     * Get all active brigades
+     */
+    public function getBrygady()
+    {
+        $stmt = $this->db->query('SELECT b.*, l.nr_linii, l.typ as linia_typ FROM brygady b LEFT JOIN linie l ON b.linia_id = l.id WHERE b.is_active = true ORDER BY b.nazwa');
+        return $stmt->fetchAll();
+    }
+    
+    /**
+     * F14-F16: Create or update line
+     */
+    public function adminLinia($data, $method = 'POST', $liniaId = null, $reqUser = null)
+    {
+        if (!in_array($reqUser['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            return [null, 'unauthorized'];
+        }
+        
+        // DELETE line (soft delete)
+        if ($method === 'DELETE' && $liniaId) {
+            $stmt = $this->db->prepare('UPDATE linie SET is_active = false WHERE id = :id RETURNING *');
+            $stmt->execute(['id' => $liniaId]);
+            $result = $stmt->fetch();
+            if ($result) {
+                LogHelper::log($reqUser['id'], 'linia_deleted', 'linie', $liniaId);
+            }
+            return [$result, null];
+        }
+        
+        // UPDATE line
+        if ($method === 'PUT' && $liniaId) {
+            $updates = [];
+            $params = ['id' => $liniaId];
+            
+            if (isset($data['nr_linii'])) {
+                $updates[] = 'nr_linii = :nr';
+                $params['nr'] = $data['nr_linii'];
+            }
+            if (isset($data['typ'])) {
+                $updates[] = 'typ = :typ';
+                $params['typ'] = $data['typ'];
+            }
+            if (isset($data['start_point'])) {
+                $updates[] = 'start_point = :start';
+                $params['start'] = $data['start_point'];
+            }
+            if (isset($data['end_point'])) {
+                $updates[] = 'end_point = :end';
+                $params['end'] = $data['end_point'];
+            }
+            if (isset($data['opis'])) {
+                $updates[] = 'opis = :opis';
+                $params['opis'] = $data['opis'];
+            }
+            
+            if (empty($updates)) {
+                return [null, 'no_updates'];
+            }
+            
+            $sql = 'UPDATE linie SET ' . implode(', ', $updates) . ' WHERE id = :id RETURNING *';
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $result = $stmt->fetch();
+            if ($result) {
+                LogHelper::log($reqUser['id'], 'linia_updated', 'linie', $liniaId, ['changes' => $data]);
+            }
+            return [$result, null];
+        }
+        
+        // POST: INSERT new line
+        if (!isset($data['nr_linii'])) {
+            return [null, 'missing_nr_linii'];
+        }
+        
+        // Ensure is_active column exists
+        try {
+            $this->db->exec('ALTER TABLE linie ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true');
+        } catch (\Throwable $e) { /* ignore */ }
+        
+        $stmt = $this->db->prepare('INSERT INTO linie (nr_linii, typ, start_point, end_point, opis, is_active) VALUES (:nr, :typ, :start, :end, :opis, true) RETURNING *');
+        $stmt->execute([
+            'nr' => $data['nr_linii'],
+            'typ' => $data['typ'] ?? 'bus',
+            'start' => $data['start_point'] ?? null,
+            'end' => $data['end_point'] ?? null,
+            'opis' => $data['opis'] ?? null,
+        ]);
+        
+        $result = $stmt->fetch();
+        if ($result) {
+            LogHelper::log($reqUser['id'], 'linia_created', 'linie', $result['id'], ['linia' => $result]);
+        }
+        return [$result, null];
+    }
+    
+    /**
+     * F14-F16: Create or update brigade
+     */
+    public function adminBrygada($data, $method = 'POST', $brygadaId = null, $reqUser = null)
+    {
+        if (!in_array($reqUser['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            return [null, 'unauthorized'];
+        }
+        
+        // DELETE brigade (soft delete)
+        if ($method === 'DELETE' && $brygadaId) {
+            $stmt = $this->db->prepare('UPDATE brygady SET is_active = false WHERE id = :id RETURNING *');
+            $stmt->execute(['id' => $brygadaId]);
+            $result = $stmt->fetch();
+            if ($result) {
+                LogHelper::log($reqUser['id'], 'brygada_deleted', 'brygady', $brygadaId);
+            }
+            return [$result, null];
+        }
+        
+        // UPDATE brigade
+        if ($method === 'PUT' && $brygadaId) {
+            $updates = [];
+            $params = ['id' => $brygadaId];
+            
+            if (isset($data['nazwa'])) {
+                $updates[] = 'nazwa = :nazwa';
+                $params['nazwa'] = $data['nazwa'];
+            }
+            if (isset($data['linia_id'])) {
+                $updates[] = 'linia_id = :linia';
+                $params['linia'] = $data['linia_id'];
+            }
+            if (isset($data['typ_brygady'])) {
+                $updates[] = 'typ_brygady = :typ';
+                $params['typ'] = $data['typ_brygady'];
+            }
+            
+            if (empty($updates)) {
+                return [null, 'no_updates'];
+            }
+            
+            $sql = 'UPDATE brygady SET ' . implode(', ', $updates) . ' WHERE id = :id RETURNING *';
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $result = $stmt->fetch();
+            if ($result) {
+                LogHelper::log($reqUser['id'], 'brygada_updated', 'brygady', $brygadaId, ['changes' => $data]);
+            }
+            return [$result, null];
+        }
+        
+        // POST: INSERT new brigade
+        if (!isset($data['nazwa'])) {
+            return [null, 'missing_nazwa'];
+        }
+        
+        // Ensure typ_brygady column exists (F16: day/night shift marking)
+        try {
+            $this->db->exec('ALTER TABLE brygady ADD COLUMN IF NOT EXISTS typ_brygady VARCHAR(20) DEFAULT \'dzienna\'');
+        } catch (\Throwable $e) { /* ignore */ }
+        
+        $stmt = $this->db->prepare('INSERT INTO brygady (nazwa, linia_id, typ_brygady, is_active) VALUES (:nazwa, :linia, :typ, true) RETURNING *');
+        $stmt->execute([
+            'nazwa' => $data['nazwa'],
+            'linia' => $data['linia_id'] ?? null,
+            'typ' => $data['typ_brygady'] ?? 'dzienna', // 'dzienna' or 'nocna'
+        ]);
+        
+        $result = $stmt->fetch();
+        if ($result) {
+            LogHelper::log($reqUser['id'], 'brygada_created', 'brygady', $result['id'], ['brygada' => $result]);
+        }
+        return [$result, null];
+    }
+    
+    /**
+     * F17-F20: Update existing schedule entry
+     */
+    public function updateGrafik($grafikId, $data, $reqUser)
+    {
+        if (!in_array($reqUser['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            return [null, 'unauthorized'];
+        }
+        
+        $updates = [];
+        $params = ['id' => $grafikId];
+        
+        if (isset($data['pracownik_id'])) {
+            $updates[] = 'pracownik_id = :pid';
+            $params['pid'] = $data['pracownik_id'];
+        }
+        if (isset($data['data'])) {
+            $updates[] = 'data = :data';
+            $params['data'] = $data['data'];
+        }
+        if (isset($data['brygada_id'])) {
+            $updates[] = 'brygada_id = :bry';
+            $params['bry'] = $data['brygada_id'];
+        }
+        if (isset($data['pojazd_id'])) {
+            $updates[] = 'pojazd_id = :poj';
+            $params['poj'] = $data['pojazd_id'];
+        }
+        if (isset($data['status'])) {
+            $updates[] = 'status = :status';
+            $params['status'] = $data['status'];
+        }
+        
+        if (empty($updates)) {
+            return [null, 'no_updates'];
+        }
+        
+        // F20: Validate conflict if changing pracownik or brygada or data
+        if (isset($data['pracownik_id']) || isset($data['brygada_id']) || isset($data['data'])) {
+            // Get current values to merge with update
+            $stmt = $this->db->prepare('SELECT pracownik_id, data, brygada_id FROM grafiki WHERE id = :id');
+            $stmt->execute(['id' => $grafikId]);
+            $current = $stmt->fetch();
+            if ($current) {
+                $checkPracownikId = $data['pracownik_id'] ?? $current['pracownik_id'];
+                $checkData = $data['data'] ?? $current['data'];
+                $checkBrygadaId = $data['brygada_id'] ?? $current['brygada_id'];
+                
+                [$valid, $err] = $this->validateScheduleConflict($checkPracownikId, $checkData, $checkBrygadaId, $grafikId);
+                if (!$valid) {
+                    return [null, $err];
+                }
+            }
+        }
+        
+        $updates[] = 'updated_at = NOW()';
+        $sql = 'UPDATE grafiki SET ' . implode(', ', $updates) . ' WHERE id = :id RETURNING *';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $result = $stmt->fetch();
+        
+        if ($result) {
+            LogHelper::log($reqUser['id'], 'grafik_updated', 'grafiki', $grafikId, ['changes' => $data]);
+        }
+        return [$result, null];
+    }
+    
+    /**
+     * F17-F20: Delete schedule entry
+     */
+    public function deleteGrafik($grafikId, $reqUser)
+    {
+        if (!in_array($reqUser['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            return [null, 'unauthorized'];
+        }
+        
+        // Soft delete by setting status to 'anulowana'
+        $stmt = $this->db->prepare('UPDATE grafiki SET status = \'anulowana\', updated_at = NOW() WHERE id = :id RETURNING *');
+        $stmt->execute(['id' => $grafikId]);
+        $result = $stmt->fetch();
+        
+        if ($result) {
+            LogHelper::log($reqUser['id'], 'grafik_deleted', 'grafiki', $grafikId);
+        }
+        return [$result, null];
+    }
+    
+    /**
+     * F12: Get vehicle usage history
+     */
+    public function getVehicleUsageHistory($pojazdId)
+    {
+        try {
+            $stmt = $this->db->prepare('
+                SELECT vu.*, 
+                       CONCAT(p.imie, \' \', p.nazwisko) as kierowca,
+                       g.data as data_grafiku
+                FROM vehicle_usage vu
+                LEFT JOIN pracownicy p ON vu.pracownik_id = p.id
+                LEFT JOIN grafiki g ON vu.grafik_id = g.id
+                WHERE vu.pojazd_id = :pid
+                ORDER BY vu.data_start DESC
+                LIMIT 100
+            ');
+            $stmt->execute(['pid' => $pojazdId]);
+            return $stmt->fetchAll();
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+    
+    /**
+     * Approve/reject request with status update (F22-F24)
+     */
+    public function updateWniosekStatus($wniosek_id, $status, $reqUser, $reason = null)
+    {
+        if (!in_array($reqUser['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            return [null, 'unauthorized'];
+        }
+        
+        if (!in_array($status, ['zatwierdzony', 'odrzucony', 'anulowany', 'zaakceptowany'])) {
+            return [null, 'invalid_status'];
+        }
+        
+        $stmt = $this->db->prepare('SELECT id, pracownik_id FROM wnioski WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $wniosek_id]);
+        $wniosek = $stmt->fetch();
+        if (!$wniosek) {
+            return [null, 'not_found'];
+        }
+        
+        $stmt = $this->db->prepare('UPDATE wnioski SET status = :status, data_rozpatrzenia = NOW() WHERE id = :id RETURNING *');
+        $stmt->execute([
+            'status' => $status,
+            'id' => $wniosek_id
+        ]);
+        
+        $result = $stmt->fetch();
+        if ($result) {
+            $action = $status === 'zatwierdzony' || $status === 'zaakceptowany' ? 'wniosek_approved' : 'wniosek_' . $status;
+            LogHelper::log($reqUser['id'], $action, 'wnioski', $wniosek_id, [
+                'pracownik_id' => $wniosek['pracownik_id'],
+                'reason' => $reason,
+                'status' => $status
+            ]);
+        }
+        return [$result, null];
+    }
+
     // --- JWT helpers (HS256 manual) ---
     private function b64url($data) { return rtrim(strtr(base64_encode($data), '+/', '-_'), '='); }
     private function signJwt(array $payload, $secret)

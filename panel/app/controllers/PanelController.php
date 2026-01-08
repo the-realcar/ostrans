@@ -67,4 +67,14 @@ class PanelController {
         $this->requireZarzad($user);
         require __DIR__ . '/../views/pojazdy.php';
     }
+    
+    public function linesManagement() {
+        $user = $this->requireAuth();
+        if (!in_array($user['uprawnienie'] ?? null, ['zarzad', 'dyspozytor'])) {
+            http_response_code(403);
+            echo 'Brak uprawnień.';
+            exit;
+        }
+        require __DIR__ . '/../views/lines_management.php';
+    }
 }

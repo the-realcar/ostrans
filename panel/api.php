@@ -103,6 +103,10 @@ switch (true) {
         $u = get_bearer_user($jwtSecret); if (!$u) json_response(['error'=>'no auth'],401);
         json_response($api->linie());
         break;
+    case $uri === '/api/brygady':
+        $u = get_bearer_user($jwtSecret); if (!$u) json_response(['error'=>'no auth'],401);
+        json_response($api->getBrygady());
+        break;
     case $uri === '/api/grafik':
         $u = get_bearer_user($jwtSecret); if (!$u) json_response(['error'=>'no auth'],401);
         $uid = $_GET['userId'] ?? null;
@@ -222,6 +226,95 @@ switch (true) {
         header('Content-Disposition: attachment; filename="' . $result['filename'] . '"');
         echo $result['content'];
         exit;
+        break;
+    // F14-F16: Lines management
+    case $uri === '/api/admin/linia' && $method === 'POST':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->adminLinia($body, 'POST', null, $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'linia'=>$res]);
+        break;
+    case preg_match('#^/api/admin/linia/(\d+)$#', $uri, $m) && $method === 'PUT':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->adminLinia($body, 'PUT', (int)$m[1], $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'linia'=>$res]);
+        break;
+    case preg_match('#^/api/admin/linia/(\d+)$#', $uri, $m) && $method === 'DELETE':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        [$res, $err] = $api->adminLinia([], 'DELETE', (int)$m[1], $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'linia'=>$res]);
+        break;
+    // F14-F16: Brigade management
+    case $uri === '/api/admin/brygada' && $method === 'POST':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->adminBrygada($body, 'POST', null, $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'brygada'=>$res]);
+        break;
+    case preg_match('#^/api/admin/brygada/(\d+)$#', $uri, $m) && $method === 'PUT':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->adminBrygada($body, 'PUT', (int)$m[1], $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'brygada'=>$res]);
+        break;
+    case preg_match('#^/api/admin/brygada/(\d+)$#', $uri, $m) && $method === 'DELETE':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        [$res, $err] = $api->adminBrygada([], 'DELETE', (int)$m[1], $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'brygada'=>$res]);
+        break;
+    // F17-F20: Schedule management - update and delete
+    case preg_match('#^/api/admin/grafik/(\d+)$#', $uri, $m) && $method === 'PUT':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->updateGrafik((int)$m[1], $body, $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'grafik'=>$res]);
+        break;
+    case preg_match('#^/api/admin/grafik/(\d+)$#', $uri, $m) && $method === 'DELETE':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        [$res, $err] = $api->deleteGrafik((int)$m[1], $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'grafik'=>$res]);
+        break;
+    // F12: Vehicle usage history
+    case preg_match('#^/api/pojazd/(\d+)/usage$#', $uri, $m) && $method === 'GET':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        json_response($api->getVehicleUsageHistory((int)$m[1]));
+        break;
+    // F22-F24: Update request status (approve/reject with reason)
+    case preg_match('#^/api/wnioski/(\d+)/status$#', $uri, $m) && $method === 'PUT':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || !in_array(($u['uprawnienie'] ?? ''), ['zarzad','dyspozytor'])) 
+            json_response(['error'=>'forbidden'],403);
+        $body = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$res, $err] = $api->updateWniosekStatus((int)$m[1], $body['status'] ?? '', $u, $body['reason'] ?? null);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'wniosek'=>$res]);
         break;
     default:
         json_response(['error' => 'not found'], 404);
