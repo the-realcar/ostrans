@@ -5,8 +5,8 @@ class Database {
     public $pdo;
 
     public function __construct() {
-        $env = $this->loadEnv(__DIR__ . '/../../env.txt'); // env.txt provided in repo root
-        $dsn = $env['DATABASE_URL'] ?? ($env['PG_DSN'] ?? null);
+        $env = $this->loadEnv(__DIR__ . '/../../.env'); // .env file in repo root
+        $dsn = $env['DATABASE_URL'] ?? ($env['PG_DSN'] ?? getenv('DATABASE_URL'));
 
         // support DATABASE_URL in form postgresql://user:pass@host:port/dbname
         if ($dsn && strpos($dsn, 'postgresql://') === 0) {
@@ -48,7 +48,18 @@ class Database {
             if ($line === '' || $line[0] === '#') continue;
             if (strpos($line, '=') === false) continue;
             [$k,$v] = explode('=', $line, 2);
-            $data[trim($k)] = trim($v);
+            $k = trim($k);
+            $v = trim($v);
+            // Remove quotes if present
+            if ((substr($v, 0, 1) === '"' && substr($v, -1) === '"') || 
+                (substr($v, 0, 1) === "'" && substr($v, -1) === "'")) {
+                $v = substr($v, 1, -1);
+            }
+            $data[$k] = $v;
+            // Also set in environment
+            if (!getenv($k)) {
+                putenv("$k=$v");
+            }
         }
         return $data;
     }

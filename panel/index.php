@@ -1,4 +1,20 @@
 <?php
+// Force HTTPS in production (disabled in development)
+$force_https = getenv('FORCE_HTTPS') !== 'false' && (!isset($_SERVER['SERVER_NAME']) || $_SERVER['SERVER_NAME'] !== 'localhost');
+if ($force_https && (!isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] !== 'on')) {
+    if (isset($_SERVER['HTTP_HOST']) && isset($_SERVER['REQUEST_URI'])) {
+        $redirect = 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+        header('Location: ' . $redirect, true, 301);
+        exit;
+    }
+}
+
+// Security headers
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('X-XSS-Protection: 1; mode=block');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
 session_start();
 
 require_once __DIR__ . '/app/core/Database.php';
@@ -34,6 +50,7 @@ if ($route === 'admin') { $panel->admin(); exit; }
 if ($route === 'employees') { $panel->employees(); exit; }
 if ($route === 'pojazdy') { $panel->pojazdy(); exit; }
 if ($route === 'lines-management') { $panel->linesManagement(); exit; }
+if ($route === 'import-pracownicy') { $panel->importPracownicy(); exit; }
 
 // Serve embedded HTML (previously index.html) for home route and inject session user as JS
 if ($route === 'home') {

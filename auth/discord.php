@@ -1,12 +1,20 @@
 <?php
 // Redirect to Discord OAuth authorize URL
 $root = __DIR__ . '/..';
-if (file_exists($root . '/env.txt')) {
-    foreach (file($root . '/env.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+if (file_exists($root . '/.env')) {
+    foreach (file($root . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if ($line === '' || $line[0] === '#') continue;
         if (strpos($line, '=') === false) continue;
         list($k,$v) = explode('=', $line, 2);
-        if (!isset($_ENV[trim($k)])) $_ENV[trim($k)] = trim($v);
+        $k = trim($k);
+        $v = trim($v);
+        // Remove quotes
+        if ((substr($v, 0, 1) === '"' && substr($v, -1) === '"') || 
+            (substr($v, 0, 1) === "'" && substr($v, -1) === "'")) {
+            $v = substr($v, 1, -1);
+        }
+        if (!getenv($k)) putenv("$k=$v");
+        if (!isset($_ENV[$k])) $_ENV[$k] = $v;
     }
 }
 $clientId = getenv('DISCORD_CLIENT_ID') ?: ($_ENV['DISCORD_CLIENT_ID'] ?? null);

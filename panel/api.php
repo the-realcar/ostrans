@@ -3,8 +3,26 @@
 use App\Core\Database;
 use App\Controllers\ApiController;
 
+// Load .env file
+if (file_exists(__DIR__ . '/../.env')) {
+    foreach (file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if ($line === '' || $line[0] === '#') continue;
+        if (strpos($line, '=') === false) continue;
+        list($k,$v) = explode('=', $line, 2);
+        $k = trim($k);
+        $v = trim($v);
+        // Remove quotes
+        if ((substr($v, 0, 1) === '"' && substr($v, -1) === '"') || 
+            (substr($v, 0, 1) === "'" && substr($v, -1) === "'")) {
+            $v = substr($v, 1, -1);
+        }
+        if (!getenv($k)) putenv("$k=$v");
+        if (!isset($_ENV[$k])) $_ENV[$k] = $v;
+    }
+}
+
 // Basic CORS
-header('Access-Control-Allow-Origin: ' . ($_ENV['ALLOW_ORIGIN'] ?? $_SERVER['HTTP_ORIGIN'] ?? '*'));
+header('Access-Control-Allow-Origin: ' . (getenv('ALLOW_ORIGIN') ?: ($_ENV['ALLOW_ORIGIN'] ?? $_SERVER['HTTP_ORIGIN'] ?? '*')));
 header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization');
 header('Access-Control-Allow-Methods: GET,POST,PUT,DELETE,OPTIONS');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
@@ -315,6 +333,21 @@ switch (true) {
         [$res, $err] = $api->updateWniosekStatus((int)$m[1], $body['status'] ?? '', $u, $body['reason'] ?? null);
         if ($err) json_response(['error'=>$err], 400);
         json_response(['ok'=>true, 'wniosek'=>$res]);
+        break;
+    // F28: Import employees from CSV
+    case $uri === '/api/admin/import/pracownicy' && $method === 'POST':
+        $u = get_bearer_user($jwtSecret); 
+        if (!$u || ($u['uprawnienie'] ?? '') !== 'zarzad') 
+            json_response(['error'=>'forbidden'],403);
+        
+        if (empty($_FILES['csv']) || $_FILES['csv']['error'] !== UPLOAD_ERR_OK) {
+            json_response(['error' => 'no_file_uploaded'], 400);
+        }
+        
+        $tmpFile = $_FILES['csv']['tmp_name'];
+        [$res, $err] = $api->importPracownicyCSV($tmpFile, $u);
+        if ($err) json_response(['error'=>$err], 400);
+        json_response(['ok'=>true, 'result'=>$res]);
         break;
     default:
         json_response(['error' => 'not found'], 404);

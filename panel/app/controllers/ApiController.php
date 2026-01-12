@@ -1085,6 +1085,105 @@ class ApiController
         }
         return [$result, null];
     }
+    
+    /**
+     * Import employees from CSV file (F28)
+     * Expected CSV format: imie,nazwisko,login,haslo,email,uprawnienie_id,stanowisko_id,discord_id
+     */
+    public function importPracownicyCSV($filePath, $reqUser)
+    {
+        if (!AuthHelper::isManagement($reqUser)) {
+            return [null, 'unauthorized'];
+        }
+        
+        if (!file_exists($filePath)) {
+            return [null, 'file_not_found'];
+        }
+        
+        $imported = 0;
+        $errors = [];
+        $skipped = 0;
+        
+        $handle = fopen($filePath, 'r');
+        if (!$handle) {
+            return [null, 'cannot_open_file'];
+        }
+        
+        // Skip header row
+        $header = fgetcsv($handle);
+        
+        $this->db->beginTransaction();
+        
+        try {
+            while (($row = fgetcsv($handle)) !== false) {
+                if (count($row) < 4) {
+                    $skipped++;
+                    continue;
+                }
+                
+                $imie = trim($row[0] ?? '');
+                $nazwisko = trim($row[1] ?? '');
+                $login = trim($row[2] ?? '');
+                $haslo = trim($row[3] ?? '');
+                $email = trim($row[4] ?? null);
+                $uprawnienie_id = intval($row[5] ?? 1); // Default: kierowca
+                $stanowisko_id = !empty($row[6]) ? intval($row[6]) : null;
+                $discord_id = trim($row[7] ?? null);
+                
+                if (empty($imie) || empty($nazwisko) || empty($login) || empty($haslo)) {
+                    $errors[] = "Skipped row: missing required fields (login: $login)";
+                    $skipped++;
+                    continue;
+                }
+                
+                // Check if user exists
+                $stmt = $this->db->prepare('SELECT id FROM pracownicy WHERE login = :login');
+                $stmt->execute(['login' => $login]);
+                if ($stmt->fetch()) {
+                    $errors[] = "User already exists: $login";
+                    $skipped++;
+                    continue;
+                }
+                
+                // Insert new employee
+                $hashedPassword = password_hash($haslo, PASSWORD_BCRYPT);
+                $stmt = $this->db->prepare('INSERT INTO pracownicy (imie, nazwisko, login, haslo, email, uprawnienie_id, stanowisko_id, discord_id, is_active) VALUES (:imie, :nazwisko, :login, :haslo, :email, :upr, :stan, :discord, true)');
+                $stmt->execute([
+                    'imie' => $imie,
+                    'nazwisko' => $nazwisko,
+                    'login' => $login,
+                    'haslo' => $hashedPassword,
+                    'email' => $email,
+                    'upr' => $uprawnienie_id,
+                    'stan' => $stanowisko_id,
+                    'discord' => $discord_id
+                ]);
+                
+                $imported++;
+            }
+            
+            $this->db->commit();
+            
+            LogHelper::log($reqUser['id'], 'import_employees_csv', 'pracownicy', null, [
+                'imported' => $imported,
+                'skipped' => $skipped,
+                'errors_count' => count($errors)
+            ]);
+            
+            fclose($handle);
+            
+            return [[
+                'imported' => $imported,
+                'skipped' => $skipped,
+                'errors' => $errors
+            ], null];
+            
+        } catch (\Exception $e) {
+            $this->db->rollBack();
+            fclose($handle);
+            return [null, 'import_failed: ' . $e->getMessage()];
+        }
+    }
 
     // --- JWT helpers (HS256 manual) ---
     private function b64url($data) { return rtrim(strtr(base64_encode($data), '+/', '-_'), '='); }

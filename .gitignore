@@ -1,0 +1,108 @@
+# PPUT Ostrans - Git Ignore
+
+# ==================================
+# ENVIRONMENT & SECRETS
+# ==================================
+.env
+.env.local
+.env.*.local
+env.txt
+*.env
+
+# ==================================
+# BACKUPS
+# ==================================
+backups/
+*.sql
+*.sql.gz
+*.dump
+*.backup
+
+# ==================================
+# LOGS
+# ==================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==================================
+# NODE
+# ==================================
+node_modules/
+package-lock.json
+yarn.lock
+.npm
+.yarn
+
+# ==================================
+# PHP
+# ==================================
+vendor/
+composer.lock
+*.cache
+
+# ==================================
+# UPLOADS
+# ==================================
+uploads/
+tmp/
+temp/
+*.tmp
+
+# ==================================
+# IDE & EDITORS
+# ==================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# ==================================
+# OS
+# ==================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ==================================
+# TESTING
+# ==================================
+.phpunit.result.cache
+coverage/
+.coverage
+*.cover
+
+# ==================================
+# BUILD
+# ==================================
+dist/
+build/
+*.min.js
+*.min.css
+
+# ==================================
+# PRIVATE DATA
+# ==================================
+private/
+secrets/
+credentials/
+*.key
+*.pem
+*.crt
+
+# ==================================
+# CUSTOM
+# ==================================
+# Add project-specific ignores here

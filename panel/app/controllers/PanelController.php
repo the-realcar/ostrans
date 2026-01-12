@@ -77,4 +77,10 @@ class PanelController {
         }
         require __DIR__ . '/../views/lines_management.php';
     }
+    
+    public function importPracownicy() {
+        $user = $this->requireAuth();
+        $this->requireZarzad($user);
+        require __DIR__ . '/../views/import_pracownicy.php';
+    }
 }
