@@ -349,6 +349,56 @@ switch (true) {
         if ($err) json_response(['error'=>$err], 400);
         json_response(['ok'=>true, 'result'=>$res]);
         break;
+    
+    // Public API endpoints (no authentication required)
+    case $uri === '/api/public/lines' && $method === 'GET':
+        // Fetch lines from SIL API and cache for 5 minutes
+        $cacheFile = sys_get_temp_dir() . '/ostrans_lines_cache.json';
+        $cacheTime = file_exists($cacheFile) ? filemtime($cacheFile) : 0;
+        
+        if (time() - $cacheTime < 300) {
+            $linesData = file_get_contents($cacheFile);
+        } else {
+            $linesData = @file_get_contents('https://sil.kanbeq.me/ostrans/api/lines');
+            if ($linesData) {
+                file_put_contents($cacheFile, $linesData);
+            }
+        }
+        
+        if ($linesData) {
+            $lines = json_decode($linesData, true);
+            json_response(['lines' => $lines]);
+        } else {
+            json_response(['error' => 'unable to fetch lines'], 503);
+        }
+        break;
+    
+    case preg_match('#^/api/public/lines/([^/]+)/([^/]+)/stops$#', $uri, $m) && $method === 'GET':
+        $line = urldecode($m[1]);
+        $variant = urldecode($m[2]);
+        
+        // Fetch stops from SIL API with caching
+        $cacheKey = md5("$line-$variant");
+        $cacheFile = sys_get_temp_dir() . "/ostrans_stops_{$cacheKey}.json";
+        $cacheTime = file_exists($cacheFile) ? filemtime($cacheFile) : 0;
+        
+        if (time() - $cacheTime < 300) {
+            $stopsData = file_get_contents($cacheFile);
+        } else {
+            $stopsData = @file_get_contents("https://sil.kanbeq.me/ostrans/api/lines/" . urlencode($line) . "/" . urlencode($variant) . "/stops");
+            if ($stopsData) {
+                file_put_contents($cacheFile, $stopsData);
+            }
+        }
+        
+        if ($stopsData) {
+            $stops = json_decode($stopsData, true);
+            json_response(['stops' => $stops]);
+        } else {
+            json_response(['error' => 'unable to fetch stops'], 503);
+        }
+        break;
+    
     default:
         json_response(['error' => 'not found'], 404);
 }
