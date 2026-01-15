@@ -31,15 +31,17 @@
     html, body { margin:0; padding:0; font-family: Quicksand, Arial, sans-serif; color: var(--text); background: var(--bg); }
     a { color: var(--brand-2); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; background: var(--brand); color:#fff; }
-    .logo-title { display:flex; align-items:center; gap:12px; font-weight:700; }
-    header img { height:42px; display:block; }
-    nav a { color:#dbeafe; margin-left:14px; font-weight:600; }
-    nav a:hover { color:#fff; }
-    #themeToggle { background:#fff; color:#111; border:1px solid rgba(0,0,0,.08); border-radius:8px; padding:8px 12px; cursor:pointer; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:20px 24px; background: var(--brand); color:#fff; }
+    .logo-title { display:flex; align-items:center; gap:12px; font-weight:700; font-size:1.3rem; }
+    header img { height:50px; display:block; }
+    nav { display:flex; gap:12px; align-items:center; }
+    nav a { display:inline-block; background:rgba(255,255,255,.15); color:#fff; padding:10px 16px; border-radius:6px; font-weight:600; text-decoration:none; border:1px solid rgba(255,255,255,.25); transition:all 0.2s; }
+    nav a:hover { background:rgba(255,255,255,.25); color:#fff; }
+    #themeToggle { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:6px; padding:10px 16px; cursor:pointer; font-weight:600; transition:all 0.2s; }
+    #themeToggle:hover { background:rgba(255,255,255,.25); }
 
-    main { max-width:1100px; margin:26px auto; padding:0 16px; }
-    h1 { margin:0 0 16px; font-size:1.8rem; }
+    main { max-width:1200px; margin:32px auto; padding:0 20px; }
+    h1 { margin:0 0 20px; font-size:2rem; }
     .legend { display:flex; gap:14px; margin-bottom:18px; font-size:0.9rem; }
     .legend-item { display:flex; align-items:center; gap:6px; }
     .legend-dot { width:16px; height:16px; border-radius:50%; }
@@ -56,8 +58,24 @@
     .line-badge.trol { background: var(--trol); color:#fff; }
     .line-badge.bus { background: var(--bus); color:#fff; }
 
-    footer { margin-top:26px; background:#fff; border-top:1px solid var(--border); }
-    .footer-inner { max-width:1100px; margin:0 auto; padding:16px; color: var(--muted); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+    footer {
+      background-color: var(--brand);
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+      margin-top: 60px;
+    }
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    .footer-logo img {
+      height: 80px;
+    }
 
     @media (max-width:600px) {
       header { flex-direction:column; align-items:flex-start; gap:8px; }
@@ -76,13 +94,13 @@
   <header>
     <div class="logo-title">
       <a href="/"><img src="https://ostrans.famisska.pl/logo.png" alt="Logo PPUT Ostrans"></a>
-      <span>PPUT Ostrans — Linie</span>
+      <span>PPUT Ostrans</span>
     </div>
-    <button id="themeToggle" type="button" aria-label="Przełącz motyw" aria-pressed="false" style="margin-left:12px">Motyw</button>
+    <button id="themeToggle" type="button" aria-label="Przełącz motyw" aria-pressed="false">🌙 Motyw</button>
     <nav>
-      <a href="/">Strona główna</a>
-      <a href="/linie">Linie</a>
-      <a href="/panel/index.php">Panel pracowników</a>
+      <a href="/pracuj.php">Pracuj z nami</a>
+      <a href="/linie.php">Linie</a>
+      <a href="/panel/index.php">Panel</a>
     </nav>
   </header>
 
@@ -97,6 +115,10 @@
 
     <?php if (empty($grouped['tram']) && empty($grouped['trol']) && empty($grouped['bus'])): ?>
       <p style="color:var(--muted)">Brak danych linii (API/Baza niedostępne?). Spróbuj ponownie później.</p>
+    <?php else: ?>
+      <div style="background:#e3f2fd; border-left:4px solid #1976d2; padding:12px 16px; margin-bottom:16px; border-radius:4px; color:#0d47a1; font-size:0.9rem;">
+        <strong>ℹ️ Dane z SIL API:</strong> Linie są pobierane z głównego źródła danych. Jeśli SIL byłby niedostępny, system korzysta z lokalnej bazy danych lub próbek testowych.
+      </div>
     <?php endif; ?>
 
     <?php foreach ($grouped as $type => $linesInType): 
@@ -121,10 +143,11 @@
   </main>
 
   <footer>
-    <div class="footer-inner">
-      <span>© <?= htmlspecialchars($year) ?> PPUT Ostrans</span>
-      <span><a href="https://ostrans.famisska.pl/polityka-prywatnosci">Polityka prywatności</a></span>
+    <div class="footer-logo">
+      <a href="/"><img src="https://ostrans.famisska.pl/logo.png" alt="Logo PPUT Ostrans"></a>
+      <span>PPUT Ostrans</span>
     </div>
+    <p>Copyright © <?= htmlspecialchars($year) ?> Ostrans. Wszelkie prawa zastrzeżone</p>
   </footer>
 
   <script>
@@ -132,6 +155,7 @@
       const btn = document.getElementById('themeToggle');
       const apply = (mode) => {
         document.body.setAttribute('data-theme', mode);
+        btn.textContent = mode === 'dark' ? '\u2600\ufe0f Motyw' : '\ud83c\udf19 Motyw';
         try { localStorage.setItem('theme', mode); } catch(e){}
         btn && btn.setAttribute('aria-pressed', mode === 'dark' ? 'true' : 'false');
       };

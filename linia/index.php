@@ -103,6 +103,79 @@ usort($lineVariants, function($a, $b) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&family=Oswald:wght@400;700;800&family=Doto:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/linie/styles.css">
+  <style>
+    .site-header {
+      background-color: #003366;
+      color: white;
+      padding: 20px;
+    }
+    .header-content {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+    .logo-section {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .logo-section img {
+      height: 50px;
+    }
+    .header-nav {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .header-nav a {
+      text-decoration: none;
+      color: white;
+      font-weight: bold;
+      padding: 10px 16px;
+      border-radius: 6px;
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      transition: all 0.2s;
+    }
+    .header-nav a:hover {
+      background: rgba(255,255,255,.25);
+    }
+    .theme-toggle {
+      background: rgba(255,255,255,.15);
+      color: white;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 6px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .theme-toggle:hover {
+      background: rgba(255,255,255,.25);
+    }
+    .site-footer {
+      background-color: #003366;
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+      margin-top: 60px;
+    }
+    .site-footer .footer-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    .site-footer .footer-logo img {
+      height: 80px;
+    }
+  </style>
 </head>
 <body>
 
@@ -115,15 +188,15 @@ usort($lineVariants, function($a, $b) {
         <span class="logo-text">PPUT Ostrans</span>
       </div>
       
-      <nav class="header-nav">
-        <a href="/">Strona główna</a>
-        <a href="/linie.php">Wszystkie linie</a>
-        <a href="/panel/index.php">Panel pracowników</a>
-      </nav>
-      
       <button id="themeToggle" class="theme-toggle" type="button" aria-label="Przełącz motyw" aria-pressed="false">
         🌙 Motyw
       </button>
+      
+      <nav class="header-nav">
+        <a href="/pracuj.php">Pracuj z nami</a>
+        <a href="/linie.php">Linie</a>
+        <a href="/panel/index.php">Panel</a>
+      </nav>
     </div>
   </header>
 
@@ -255,13 +328,11 @@ usort($lineVariants, function($a, $b) {
   </main>
 
   <footer class="site-footer">
-    <div class="footer-content">
-      <span>© <?= date('Y') ?> PPUT Ostrans - Przedsiębiorstwo Publicznego Usług Transportu</span>
-      <div class="footer-links">
-        <a href="https://ostrans.famisska.pl/polityka-prywatnosci">Polityka prywatności</a>
-        <a href="/panel/index.php">Panel pracowników</a>
-      </div>
+    <div class="footer-logo">
+      <a href="/"><img src="https://ostrans.famisska.pl/logo.png" alt="Logo PPUT Ostrans"></a>
+      <span>PPUT Ostrans</span>
     </div>
+    <p>Copyright © <?= date('Y') ?> Ostrans. Wszelkie prawa zastrzeżone</p>
   </footer>
 
   <script>

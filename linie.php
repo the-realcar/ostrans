@@ -1,16 +1,42 @@
 <?php
-// MVC entrypoint for /linie — uses controller + view
-require_once __DIR__ . '/panel/app/core/Database.php';
-require_once __DIR__ . '/panel/app/controllers/LinesController.php';
+/**
+ * Lines Listing Page - PPUT Ostrans
+ * Fetches data from external API (sil.kanbeq.me/ostrans)
+ */
 
-use App\Core\Database;
-use App\Controllers\LinesController;
+// Fetch lines data from external API
+$apiUrl = 'https://sil.kanbeq.me/ostrans/lines';
+$linesData = @file_get_contents($apiUrl);
+$allLines = [];
 
-$db = new Database();
-$linesController = new LinesController($db);
+if ($linesData) {
+    $decoded = json_decode($linesData, true);
+    $allLines = $decoded['lines'] ?? $decoded ?? [];
+}
 
-$grouped = $linesController->getGroupedLines();
-
+// Group lines by type
+$grouped = [];
+foreach ($allLines as $line) {
+    $type = $line['type'] ?? 'bus';
+    $lineNum = $line['line'] ?? '';
+    $variant = $line['variant'] ?? '01';
+    
+    if (!isset($grouped[$type])) {
+        $grouped[$type] = [];
+    }
+    if ($lineNum) {
+        if (!isset($grouped[$type][$lineNum])) {
+            $grouped[$type][$lineNum] = [];
+        }
+        // Store variant information
+        $grouped[$type][$lineNum][] = [
+            'variant' => $variant,
+            'from' => $line['from'] ?? '',
+            'to' => $line['to'] ?? '',
+            'route' => $line['route'] ?? ''
+        ];
+    }
+}
 // Sort numeric/alpha per group for stable UI
 foreach ($grouped as $t => &$arr) {
     uksort($arr, function($a, $b) {

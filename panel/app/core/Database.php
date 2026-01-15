@@ -6,6 +6,31 @@ class Database {
 
     public function __construct() {
         $env = $this->loadEnv(__DIR__ . '/../../.env'); // .env file in repo root
+        
+        // Try MySQL first (from .env variables)
+        if (!empty($env['DB_HOST'])) {
+            $host = $env['DB_HOST'] ?? 'mysql8';
+            $port = $env['DB_PORT'] ?? 3306;
+            $dbname = $env['DB_NAME'] ?? '';
+            $user = $env['DB_USER'] ?? '';
+            $pass = $env['DB_PASSWORD'] ?? '';
+            $charset = $env['DB_CHARSET'] ?? 'utf8';
+            
+            if ($dbname && $user) {
+                $pdo_dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset={$charset}";
+                try {
+                    $this->pdo = new \PDO($pdo_dsn, $user, $pass, [
+                        \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                        \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+                    ]);
+                    return;
+                } catch (\Throwable $e) {
+                    // MySQL failed, try PostgreSQL
+                }
+            }
+        }
+        
+        // Fallback to PostgreSQL
         $dsn = $env['DATABASE_URL'] ?? ($env['PG_DSN'] ?? getenv('DATABASE_URL'));
 
         // support DATABASE_URL in form postgresql://user:pass@host:port/dbname
